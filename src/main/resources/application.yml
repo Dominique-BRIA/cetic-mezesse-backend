@@ -1,0 +1,73 @@
+# Configuration de l'API. Les valeurs sensibles viennent des variables d'environnement
+# (mêmes noms que pour l'API Node), ou d'un fichier .env à la racine du projet en local.
+# DATABASE_URL et DIRECT_URL, au format PostgreSQL de Prisma, sont convertis en URL JDBC
+# par EnvironnementLocal (voir config/).
+
+server:
+  port: ${PORT:4000}
+  # L'adresse du client derrière le proxy d'Azure est lue par LimiteConnexionFilter.
+  forward-headers-strategy: none
+  error:
+    whitelabel:
+      enabled: false
+  compression:
+    enabled: true
+
+spring:
+  application:
+    name: cetic-api
+  main:
+    banner-mode: off
+  jpa:
+    open-in-view: false
+    # Le schéma appartient à Flyway : Hibernate ne le modifie jamais.
+    hibernate:
+      ddl-auto: none
+      naming:
+        # Les tables et colonnes gardent leurs noms ("Utilisateur", "motDePasse"…).
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        globally_quoted_identifiers: true
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_inserts: true
+        default_batch_fetch_size: 100
+  flyway:
+    # Les 4 premières migrations ont été appliquées par Prisma sur les bases existantes.
+    baseline-on-migrate: true
+    baseline-version: 4
+    locations: classpath:db/migration
+  servlet:
+    multipart:
+      max-file-size: 3MB
+      max-request-size: 120MB
+  jackson:
+    default-property-inclusion: always
+    serialization:
+      write-dates-as-timestamps: false
+  web:
+    resources:
+      add-mappings: false
+
+cetic:
+  jwt-secret: ${JWT_SECRET}
+  duree-jeton: 12h
+  cors-origins: ${CORS_ORIGINS:}
+  # Mot de passe donné à un compte après réinitialisation par le SG (décision du 16/10/2026).
+  mot-de-passe-reinitialise: password
+  dossier-photos: ${DOSSIER_PHOTOS:../api/uploads}
+  b2:
+    endpoint: ${B2_ENDPOINT:}
+    key-id: ${B2_KEY_ID:}
+    application-key: ${B2_APPLICATION_KEY:}
+    bucket: ${B2_BUCKET:}
+  amorcage:
+    proviseur-telephone: ${SEED_PROVISEUR_TELEPHONE:690000001}
+    sg-telephone: ${SEED_SG_TELEPHONE:690000002}
+    mot-de-passe: ${SEED_MOT_DE_PASSE:Cetic2026}
+
+logging:
+  level:
+    org.hibernate.orm.deprecation: error
