@@ -1,0 +1,66 @@
+name: API Azure
+
+# À chaque push sur main : GitHub compile et teste l'API, puis envoie le jar (un seul fichier,
+# prêt à lancer) sur Azure App Service. Azure ne compile et n'installe rien : il remplace app.jar
+# et redémarre ; les migrations Flyway s'appliquent au démarrage.
+#
+# L'envoi sur Azure ne se fait que si la variable du dépôt DEPLOYER_SUR_AZURE vaut « oui »
+# (Settings → Secrets and variables → Actions → Variables), une fois l'App Service passé en Java 21.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: api-azure
+  cancel-in-progress: false
+
+jobs:
+  jar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      # Compilation, tests (calcul des résultats, règles de gestion) puis le jar.
+      - run: mvn -B -ntp package
+      - run: ls -lh target/cetic-api.jar
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cetic-api
+          path: target/cetic-api.jar
+          retention-days: 7
+
+  deploiement:
+    needs: jar
+    if: vars.DEPLOYER_SUR_AZURE == 'oui'
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: ${{ vars.API_URL }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: cetic-api
+      # Le jar est envoyé tel quel ; Azure (pile Java 21 SE) le lance sous le nom app.jar.
+      # clean : le dossier du site est vidé avant l'envoi, il ne reste que le jar.
+      - uses: azure/webapps-deploy@v3
+        with:
+          app-name: cetic-mezesse-api
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: cetic-api.jar
+          type: jar
+          clean: true
+      - name: Vérification de l'API en ligne
+        env:
+          API_URL: ${{ vars.API_URL }}
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS -m 60 "$API_URL/sante" | grep -q '"ok"'; then echo "API en ligne"; exit 0; fi
+            sleep 20
+          done
+          echo "::error::L'API ne répond pas sur $API_URL/sante"
+          exit 1

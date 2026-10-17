@@ -1,6 +1,6 @@
 # API du CETIC de Mezesse — Spring Boot
 
-Réécriture en Spring Boot de l'API Node (`api/`). Mêmes routes, mêmes réponses JSON, même base PostgreSQL : le site web et l'application mobile fonctionnent sans changement.
+Réécriture en Spring Boot de l'API Node, qui reste dans le dépôt [cetic-mezesse](https://github.com/Dominique-BRIA/cetic-mezesse) (dossier `api/`). Mêmes routes, mêmes réponses JSON, même base PostgreSQL : le site web et l'application mobile fonctionnent sans changement.
 
 Java 21, Spring Boot 3.5, Maven.
 
@@ -24,7 +24,7 @@ src/main/resources/
 
 ## Lancer en local
 
-Un fichier `.env` à la racine d'`api-spring/` reprend les variables de `api/.env` (mêmes noms : `DATABASE_URL`, `JWT_SECRET`, `PORT`, `CORS_ORIGINS`, `B2_*`, `SEED_*`). Sans B2, les photos sont lues et écrites dans `../api/uploads`, comme l'API Node.
+Un fichier `.env` à la racine du dépôt (jamais commité) reprend les variables de l'API Node, avec les mêmes noms : `DATABASE_URL`, `JWT_SECRET`, `PORT`, `CORS_ORIGINS`, `B2_*`, `SEED_*`. Sans B2, les photos sont lues et écrites dans le dossier `DOSSIER_PHOTOS` (`uploads` par défaut).
 
 Le disque C: étant presque plein, le dépôt Maven local est sur D: :
 
@@ -55,7 +55,7 @@ Deux formats diffèrent, sans effet sur les clients actuels :
 
 ## Déploiement sur Azure
 
-Le déploiement est automatique. À chaque push sur `main` qui touche `api-spring/`, le workflow « API Azure (Spring Boot) » (`.github/workflows/api-spring.yml`) :
+Le déploiement est automatique. À chaque push sur `main`, le workflow « API Azure » (`.github/workflows/deploiement.yml`) :
 
 1. compile et teste l'API ;
 2. envoie **le jar** sur l'App Service `cetic-mezesse-api`.
@@ -75,11 +75,20 @@ az webapp config show -g $RG -n cetic-mezesse-api --query "{pile: linuxFxVersion
 
 La dernière commande doit afficher la pile `JAVA|21-java21` et une commande de démarrage vide ; Azure lance alors `app.jar`.
 
+### Une seule fois : brancher ce dépôt sur Azure
+
+Dans GitHub, Settings → Secrets and variables → Actions :
+
+- secret `AZURE_WEBAPP_PUBLISH_PROFILE` : le profil de publication de l'App Service (portail Azure → App Service → « Télécharger le profil de publication ») ;
+- variable `API_URL` : l'adresse de l'API, terminée par `/api` ;
+- variable `DEPLOYER_SUR_AZURE` = `oui`. Tant qu'elle n'existe pas, le workflow compile et teste sans rien envoyer.
+
 Les autres paramètres d'application ne changent pas : `DATABASE_URL`, `DIRECT_URL`, `JWT_SECRET`, `CORS_ORIGINS` et `B2_*`.
 
 ### Revenir à l'API Node
 
 1. Remettre la pile `NODE|22-lts` avec la commande de démarrage `npm run demarrage`.
-2. Lancer à la main le workflow « API Azure (Node, retour arrière) » (`api.yml`).
+2. Mettre `DEPLOYER_SUR_AZURE` à `non` ici.
+3. Dans le dépôt cetic-mezesse, lancer à la main le workflow « API Azure » (`api.yml`).
 
 La base n'a pas à être restaurée : Flyway n'y ajoute que sa table `flyway_schema_history`.

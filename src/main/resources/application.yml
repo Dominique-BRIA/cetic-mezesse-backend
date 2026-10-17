@@ -57,7 +57,7 @@ cetic:
   cors-origins: ${CORS_ORIGINS:}
   # Mot de passe donné à un compte après réinitialisation par le SG (décision du 16/10/2026).
   mot-de-passe-reinitialise: password
-  dossier-photos: ${DOSSIER_PHOTOS:../api/uploads}
+  dossier-photos: ${DOSSIER_PHOTOS:uploads}
   b2:
     endpoint: ${B2_ENDPOINT:}
     key-id: ${B2_KEY_ID:}
