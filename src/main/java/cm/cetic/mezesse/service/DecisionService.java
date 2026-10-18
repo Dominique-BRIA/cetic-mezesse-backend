@@ -29,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
-/** Journal des décisions du SG, réservé au Proviseur (RG-30). */
+/** Journal des décisions du SG, réservé au Directeur (rôle PROVISEUR, RG-30). */
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -138,7 +138,7 @@ public class DecisionService {
     decisions.saveAndFlush(maj);
     notifications.notifier(
         List.of(auteurId), "Décision désapprouvée",
-        "Le Proviseur a désapprouvé : « " + libelle + " ». Motif : " + motif + (resultat != null ? " " + resultat.effet() : ""),
+        TitreDirection.avecArticle(utilisateurs.findById(moi.id()).map(u -> u.getSexe()).orElse(null)) + " a désapprouvé : « " + libelle + " ». Motif : " + motif + (resultat != null ? " " + resultat.effet() : ""),
         resultat != null ? lien : null);
 
     // Les fichiers devenus inutiles (photos) ne sont retirés qu'une fois la transaction validée.

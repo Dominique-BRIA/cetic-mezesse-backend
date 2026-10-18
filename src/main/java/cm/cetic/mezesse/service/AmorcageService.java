@@ -104,7 +104,7 @@ public class AmorcageService implements ApplicationRunner {
     }
     CeticProperties.Amorcage c = proprietes.amorcage();
     String empreinte = motsDePasse.encode(c.motDePasse());
-    compte(Role.PROVISEUR, c.proviseurTelephone(), "PROVISEUR", "Le", empreinte);
+    compte(Role.PROVISEUR, c.proviseurTelephone(), "DIRECTEUR", "Le", empreinte);
     compte(Role.SURVEILLANT_GENERAL, c.sgTelephone(), "GÉNÉRAL", "Surveillant", empreinte);
   }
 

@@ -36,7 +36,8 @@ public final class CartePdf {
 
   public record EleveCarte(Eleve eleve, String classe, byte[] photo) {}
 
-  public static byte[] generer(Etablissement etab, String annee, List<EleveCarte> eleves) {
+  /** @param signataire « Le Directeur » ou « La Directrice » */
+  public static byte[] generer(Etablissement etab, String annee, List<EleveCarte> eleves, String signataire) {
     try (Pdf pdf = new Pdf("Cartes scolaires " + annee, etab.getNomFr())) {
       int parPage = COLONNES * LIGNES;
       for (int i = 0; i < eleves.size(); i++) {
@@ -47,7 +48,7 @@ public final class CartePdf {
         }
         float x = ORIGINE_X + (k % COLONNES) * (LARGEUR + ECART);
         float y = ORIGINE_Y + (float) Math.floor(k / (double) COLONNES) * (HAUTEUR + ECART);
-        dessinerCarte(pdf, etab, annee, eleves.get(i), x, y);
+        dessinerCarte(pdf, etab, annee, eleves.get(i), x, y, signataire);
       }
       return pdf.enOctets();
     }
@@ -81,7 +82,7 @@ public final class CartePdf {
     }
   }
 
-  private static void dessinerCarte(Pdf pdf, Etablissement etab, String annee, EleveCarte carte, float x, float y) {
+  private static void dessinerCarte(Pdf pdf, Etablissement etab, String annee, EleveCarte carte, float x, float y, String signataire) {
     float l = LARGEUR;
     float h = HAUTEUR;
     float m = 2.2f * MM;
@@ -161,13 +162,13 @@ public final class CartePdf {
       champ(pdf, "Matricule", e.getMatricule(), xc, yc[0], demi, 6, true);
       if (e.getMatriculeNational() != null) champ(pdf, "Mat. national", e.getMatriculeNational(), xc + demi + 3, yc[0], demi, 5.4f, false);
 
-      // Pied : contact du parent et visa du Proviseur.
+      // Pied : contact du parent et visa du chef d'établissement.
       float yPied = y + h - 4.3f * MM;
       pdf.trait(x + m, yPied, x + l - m, yPied, 0.3f, Couleurs.TRAIT_FIN);
       pdf.ligne(
           e.getParentTelephone() != null ? "En cas d'urgence / Emergency : " + e.getParentTelephone() : "", x + m, yPied + 2.4f, l / 2,
           Style.de(4.4f).couleur(Couleurs.GRIS));
-      pdf.ligne("Le Proviseur / The Principal", x + l / 2, yPied + 2.4f, l / 2 - m, Style.de(4.6f).gras().droite());
+      pdf.ligne(signataire + " / The Principal", x + l / 2, yPied + 2.4f, l / 2 - m, Style.de(4.6f).gras().droite());
     } catch (IOException ex) {
       throw new UncheckedIOException(ex);
     }

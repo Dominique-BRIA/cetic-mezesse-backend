@@ -47,6 +47,7 @@ public class DocumentService {
   private final InscriptionRepository inscriptions;
   private final CompetenceViseeRepository competences;
   private final StockageService stockage;
+  private final TitreDirection titre;
 
   /** Une requête « in » ne peut pas recevoir une liste vide. */
   private static List<String> nonVide(List<String> ids) {
@@ -133,7 +134,7 @@ public class DocumentService {
     List<String> annees = eleves.stream().map(i -> i.getAnnee().getLibelle()).distinct().toList();
     List<String> nomsClasses = eleves.stream().map(i -> i.getClasse().getNom()).distinct().toList();
     String nom = nomsClasses.size() == 1 ? "cartes-" + Textes.nomFichier(nomsClasses.get(0)) : "cartes-scolaires-" + cartes.size() + "-eleves";
-    return new Fichier(CartePdf.generer(etab, String.join(" / ", annees), cartes), nom, eleves.size() - cartes.size());
+    return new Fichier(CartePdf.generer(etab, String.join(" / ", annees), cartes, titre.avecArticleEnFonction()), nom, eleves.size() - cartes.size());
   }
 
   // ---------- Listes et relevés ----------

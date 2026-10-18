@@ -304,6 +304,19 @@ public class Pdf implements AutoCloseable {
     }
   }
 
+  /** Polygone plein (coordonnées depuis le haut de la page). */
+  public void polygone(float[] xs, float[] ys, String fond) {
+    try {
+      cs.setNonStrokingColor(couleur(fond));
+      cs.moveTo(xs[0], HAUTEUR - ys[0]);
+      for (int i = 1; i < xs.length; i++) cs.lineTo(xs[i], HAUTEUR - ys[i]);
+      cs.closePath();
+      cs.fill();
+    } catch (IOException e) {
+      throw new UncheckedIOException(e);
+    }
+  }
+
   public void trait(float x1, float y1, float x2, float y2, float epaisseur, String couleur) {
     try {
       cs.saveGraphicsState();

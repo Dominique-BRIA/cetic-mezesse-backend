@@ -6,6 +6,7 @@ import cm.cetic.mezesse.document.Pdf.Style;
 import cm.cetic.mezesse.entity.Attestation;
 import cm.cetic.mezesse.entity.Etablissement;
 import cm.cetic.mezesse.entity.Sexe;
+import cm.cetic.mezesse.service.TitreDirection;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +21,7 @@ public final class AttestationPdf {
   private static final float INTERLIGNE = 17;
 
   /**
-   * @param sexeSignataire sexe du Proviseur (« Je soussigné » ou « soussignée »), null si inconnu
+   * @param sexeSignataire sexe du Directeur ou de la Directrice (« Je soussigné » ou « soussignée »), null si inconnu
    */
   public static byte[] generer(Etablissement etab, Attestation a, Sexe sexeSignataire) {
     try (Pdf pdf = new Pdf("Attestation de présence effective au poste – " + a.getBeneficiaire(), "CETIC de Mezesse")) {
@@ -39,7 +40,7 @@ public final class AttestationPdf {
       String soussigne = sexeSignataire == Sexe.F ? "soussignée" : sexeSignataire == Sexe.M ? "soussigné" : "soussigné(e)";
       y = paragraphe(
           pdf,
-          "Je " + soussigne + ", " + a.getSignataire() + ", Proviseur du " + etab.getNomFr() + ", atteste par la présente que :",
+          "Je " + soussigne + ", " + a.getSignataire() + ", " + TitreDirection.titre(sexeSignataire) + " du " + etab.getNomFr() + ", atteste par la présente que :",
           y);
       y += 12;
 
@@ -64,7 +65,7 @@ public final class AttestationPdf {
       String fait = "Fait à " + etab.getLocalite() + ", le " + EnteteOfficiel.dateFr(a.getDelivreeLe().atZone(EnteteOfficiel.CAMEROUN).toLocalDate());
       float xs = X0 + L - 220;
       pdf.ligne(fait, xs, y, 220, Style.de(TAILLE).centre());
-      pdf.ligne("Le Proviseur", xs, y + 24, 220, Style.de(TAILLE).gras().centre());
+      pdf.ligne(TitreDirection.avecArticle(sexeSignataire), xs, y + 24, 220, Style.de(TAILLE).gras().centre());
       pdf.ligne(a.getSignataire(), xs, y + 104, 220, Style.de(TAILLE).gras().centre());
       return pdf.enOctets();
     }

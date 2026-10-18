@@ -62,6 +62,8 @@ public class AuthService {
     u.setPrenom(d.prenom());
     u.setTelephone(d.telephone());
     u.setEmail(d.email());
+    // Civilité : imprimée sur les documents (« La Directrice », « Mme »…). Absente : inchangée.
+    if (d.sexe() != null) u.setSexe(cm.cetic.mezesse.entity.Sexe.valueOf(d.sexe()));
     // La discipline n'a de sens que pour un professeur.
     if (u.getRole() == Role.PROFESSEUR) u.setDiscipline(d.discipline());
     return Profil.de(utilisateurs.saveAndFlush(u));

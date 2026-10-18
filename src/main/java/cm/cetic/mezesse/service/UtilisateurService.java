@@ -99,7 +99,7 @@ public class UtilisateurService {
   public Profil modifier(UtilisateurConnecte moi, String id, Enseignant d) {
     verifierContact(d);
     Utilisateur u = utilisateurs.findById(id).orElseThrow(() -> ApiException.introuvable("Compte"));
-    if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le compte du Proviseur ne se modifie pas ici.");
+    if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le compte du chef d'établissement ne se modifie pas ici.");
     if (id.equals(moi.id()) && !d.actif()) throw ApiException.invalide("Vous ne pouvez pas désactiver votre propre compte.");
     auth.verifierDisponibles(id, d.telephone(), d.email());
     if (d.carriere() != null) verifierMatricule(id, d.carriere().matricule());
@@ -122,7 +122,7 @@ public class UtilisateurService {
   @Transactional
   public String reinitialiser(UtilisateurConnecte moi, String id) {
     Utilisateur u = utilisateurs.findById(id).orElseThrow(() -> ApiException.introuvable("Compte"));
-    if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le mot de passe du Proviseur ne se réinitialise pas ici.");
+    if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le mot de passe du chef d'établissement ne se réinitialise pas ici.");
     String avantHash = u.getMotDePasse();
     boolean avantDoitChanger = u.isDoitChangerMotDePasse();
     u.setMotDePasse(motsDePasse.encode(proprietes.motDePasseReinitialise()));
@@ -159,12 +159,12 @@ public class UtilisateurService {
 
   /**
    * Carrière d'un personnel (matricule, grade, fonction, prise de service…), complétée par le SG ou par
-   * le Proviseur au moment de délivrer une attestation. Le compte du Proviseur ne se modifie pas ici.
+   * le Directeur au moment de délivrer une attestation. Le compte du chef d'établissement ne se modifie pas ici.
    */
   @Transactional
   public Profil carriere(UtilisateurConnecte moi, String id, Carriere c) {
     Utilisateur u = utilisateurs.findById(id).orElseThrow(() -> ApiException.introuvable("Compte"));
-    if (u.getRole() == Role.PROVISEUR && !id.equals(moi.id())) throw ApiException.interdit("Le compte du Proviseur ne se modifie pas ici.");
+    if (u.getRole() == Role.PROVISEUR && !id.equals(moi.id())) throw ApiException.interdit("Le compte du chef d'établissement ne se modifie pas ici.");
     verifierMatricule(id, c.matricule());
     Map<String, Object> avant = champs(u);
     appliquer(u, c);

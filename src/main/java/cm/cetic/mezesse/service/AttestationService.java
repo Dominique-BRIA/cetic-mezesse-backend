@@ -23,7 +23,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Attestations de présence effective au poste : le Proviseur les délivre aux personnels de
+ * Attestations de présence effective au poste : le Directeur (rôle PROVISEUR) les délivre aux personnels de
  * l'établissement. Chacune reçoit un numéro dans l'année scolaire et reste au registre ; les
  * informations imprimées sont gardées telles qu'à la délivrance.
  */
@@ -45,7 +45,7 @@ public class AttestationService {
   @Transactional
   public Vue delivrer(UtilisateurConnecte moi, String utilisateurId) {
     Utilisateur u = utilisateurs.findById(utilisateurId).orElseThrow(() -> ApiException.introuvable("Compte"));
-    if (u.getRole() == Role.PROVISEUR) throw ApiException.invalide("L'attestation du Proviseur est délivrée par sa hiérarchie.");
+    if (u.getRole() == Role.PROVISEUR) throw ApiException.invalide("L'attestation du chef d'établissement est délivrée par sa hiérarchie.");
     List<String> manquants = new ArrayList<>();
     if (u.getMatricule() == null) manquants.add("matricule");
     if (u.getGrade() == null) manquants.add("grade");
@@ -63,7 +63,7 @@ public class AttestationService {
     Attestation a = new Attestation();
     a.setNumero(numero);
     a.setAnneeLibelle(annee.getLibelle());
-    a.setReference(String.format(Locale.ROOT, "N° %03d/%s/%s/P", numero, annee.getLibelle(), Textes.capitales(etab.getSigle())));
+    a.setReference(String.format(Locale.ROOT, "N° %03d/%s/%s/D", numero, annee.getLibelle(), Textes.capitales(etab.getSigle())));
     a.setUtilisateur(u);
     a.setBeneficiaire(Textes.majuscules(u.getNom()) + " " + u.getPrenom());
     a.setSexe(u.getSexe());

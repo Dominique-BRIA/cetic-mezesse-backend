@@ -86,9 +86,11 @@ public final class UtilisateurDto {
       @Pattern(regexp = TELEPHONE, message = "numéro de téléphone invalide") String telephone,
       @Email(regexp = EMAIL, message = "adresse e-mail invalide") String email,
       @Size(max = 80, message = "80 caractères au plus") String discipline,
-      @JsonDeserialize(using = StringDeserializer.class) String motDePasse) {
+      @JsonDeserialize(using = StringDeserializer.class) String motDePasse,
+      @Pattern(regexp = "M|F", message = "M ou F") String sexe) {
 
     public ModificationProfil {
+      sexe = Textes.optionnel(sexe);
       nom = Textes.nettoyer(nom);
       prenom = Textes.nettoyer(prenom);
       telephone = Textes.telephone(telephone);

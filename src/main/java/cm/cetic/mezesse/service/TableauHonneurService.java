@@ -36,6 +36,7 @@ public class TableauHonneurService {
   private final ClasseRepository classes;
   private final AnneeScolaireRepository annees;
   private final EtablissementService etablissement;
+  private final TitreDirection titre;
 
   /** Élève au tableau d'honneur si sa moyenne, arrondie au centième, atteint le seuil. */
   public static boolean auTableau(Double moyenne, double seuil) {
@@ -57,11 +58,15 @@ public class TableauHonneurService {
       for (ResultatEleve r : d.resultats().eleves()) {
         if (!auTableau(r.moyenne(), seuil)) continue;
         var e = d.inscription(r.inscriptionId()).getEleve();
-        eleves.add(new Eleve(r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), r.moyenne(), r.rang()));
+        eleves.add(
+            new Eleve(
+                r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), e.getDateNaissance(), e.getLieuNaissance(),
+                r.moyenne(), r.rang()));
       }
       eleves.sort(Comparator.comparingDouble(Eleve::moyenne).reversed());
       int classes = (int) d.resultats().eleves().stream().filter(r -> r.moyenne() != null).count();
-      parClasse.add(new Classe(c.getId(), c.getNom(), classes, eleves));
+      String pp = c.getProfPrincipal() == null ? null : c.getProfPrincipal().getPrenom() + " " + Textes.majuscules(c.getProfPrincipal().getNom());
+      parClasse.add(new Classe(c.getId(), c.getNom(), classes, d.resultats().profil().moyenneGenerale(), pp, eleves));
     }
     int total = parClasse.stream().mapToInt(c -> c.eleves().size()).sum();
     return new Tableau(seuil, p, annee.getLibelle(), total, parClasse);
@@ -75,7 +80,7 @@ public class TableauHonneurService {
     }
     Etablissement etab = etablissement.requis();
     String suffixe = classeId != null && t.classes().size() == 1 ? Textes.nomFichier(t.classes().get(0).nom()) + "-" : "";
-    byte[] contenu = certificats ? TableauHonneurPdf.certificats(etab, t) : TableauHonneurPdf.liste(etab, t);
+    byte[] contenu = certificats ? TableauHonneurPdf.certificats(etab, t, titre.avecArticleEnFonction()) : TableauHonneurPdf.liste(etab, t);
     return new Fichier(contenu, (certificats ? "certificats-tableau-honneur-" : "tableau-honneur-") + suffixe + p.name(), 0);
   }
 }
