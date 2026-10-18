@@ -1,6 +1,6 @@
 # API du CETIC de Mezesse — Spring Boot
 
-Réécriture en Spring Boot de l'API Node, qui reste dans le dépôt [cetic-mezesse](https://github.com/Dominique-BRIA/cetic-mezesse) (dossier `api/`). Mêmes routes, mêmes réponses JSON, même base PostgreSQL : le site web et l'application mobile fonctionnent sans changement.
+Réécriture en Spring Boot de l'API Node, qui reste dans le dépôt [cetic-mezesse-mobile](https://github.com/Dominique-BRIA/cetic-mezesse-mobile) (dossier `api/`). Mêmes routes, mêmes réponses JSON, même base PostgreSQL : le site web et l'application mobile fonctionnent sans changement.
 
 Java 21, Spring Boot 3.5, Maven.
 
@@ -89,6 +89,6 @@ Les autres paramètres d'application ne changent pas : `DATABASE_URL`, `DIRECT_U
 
 1. Remettre la pile `NODE|22-lts` avec la commande de démarrage `npm run demarrage`.
 2. Mettre `DEPLOYER_SUR_AZURE` à `non` ici.
-3. Dans le dépôt cetic-mezesse, lancer à la main le workflow « API Azure » (`api.yml`).
+3. Dans le dépôt cetic-mezesse-mobile, réactiver et lancer à la main le workflow « API Azure » (`api.yml`).
 
 La base n'a pas à être restaurée : Flyway n'y ajoute que sa table `flyway_schema_history`.

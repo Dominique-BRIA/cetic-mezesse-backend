@@ -9,6 +9,8 @@ name: API Azure
 on:
   push:
     branches: [main]
+    # La documentation seule ne redéploie pas l'API.
+    paths-ignore: ['**.md']
   workflow_dispatch:
 
 concurrency:
