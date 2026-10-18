@@ -25,6 +25,8 @@ public interface UtilisateurRepository extends JpaRepository<Utilisateur, String
 
   Optional<Utilisateur> findFirstByIdNotAndEmail(String id, String email);
 
+  Optional<Utilisateur> findFirstByIdNotAndMatricule(String id, String matricule);
+
   /** Professeurs actifs qui ont au moins une matière dans l'année. */
   @Query(
       """

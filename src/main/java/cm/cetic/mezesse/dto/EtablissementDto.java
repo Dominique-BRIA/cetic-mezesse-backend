@@ -6,6 +6,7 @@ import cm.cetic.mezesse.entity.TypeBareme;
 import cm.cetic.mezesse.util.Textes;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
+import jakarta.validation.constraints.Digits;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
@@ -30,7 +31,9 @@ public final class EtablissementDto {
       String code,
       String boitePostale,
       String telephone,
-      String prefixeMatricule) {
+      String prefixeMatricule,
+      String sigleEn,
+      double seuilTableauHonneur) {
 
     public static Vue de(Etablissement e) {
       return e == null
@@ -38,7 +41,7 @@ public final class EtablissementDto {
           : new Vue(
               e.getId(), e.getNomFr(), e.getNomEn(), e.getSigle(), e.getRegionFr(), e.getRegionEn(), e.getDepartementFr(),
               e.getDepartementEn(), e.getArrondissement(), e.getLocalite(), e.getCode(), e.getBoitePostale(), e.getTelephone(),
-              e.getPrefixeMatricule());
+              e.getPrefixeMatricule(), e.getSigleEn(), e.getSeuilTableauHonneur().doubleValue());
     }
   }
 
@@ -56,7 +59,8 @@ public final class EtablissementDto {
       @Size(max = 60, message = "60 caractères au plus") String boitePostale,
       @Size(max = 30, message = "30 caractères au plus") String telephone,
       @NotNull(message = "obligatoire") @Pattern(regexp = "^[A-Z0-9]{2,6}$", message = "2 à 6 lettres ou chiffres majuscules")
-          String prefixeMatricule) {
+          String prefixeMatricule,
+      @Size(max = 30, message = "30 caractères au plus") String sigleEn) {
 
     public Modification {
       nomFr = Textes.nettoyer(nomFr);
@@ -72,8 +76,17 @@ public final class EtablissementDto {
       boitePostale = Textes.optionnel(boitePostale);
       telephone = Textes.optionnel(telephone);
       prefixeMatricule = Textes.nettoyer(prefixeMatricule);
+      sigleEn = Textes.optionnel(sigleEn);
     }
   }
+
+  /** Moyenne minimale pour figurer au tableau d'honneur. */
+  public record SeuilTableauHonneur(
+      @NotNull(message = "obligatoire")
+          @DecimalMin(value = "0", message = "entre 0 et 20")
+          @DecimalMax(value = "20", message = "entre 0 et 20")
+          @Digits(integer = 2, fraction = 2, message = "deux décimales au plus")
+          Double seuil) {}
 
   public record BaremeVue(String id, TypeBareme type, String libelle, String libelleLong, double min) {
 

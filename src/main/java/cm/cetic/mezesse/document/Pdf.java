@@ -209,6 +209,13 @@ public class Pdf implements AutoCloseable {
     ecrire(texte, x + dx, y, style);
   }
 
+  /** Texte sur une ligne, réduit (jusqu'à 5 points) plutôt que coupé s'il dépasse. */
+  public void ligneAjustee(String s, float x, float y, float largeurMax, Style style) {
+    float taille = style.taille();
+    while (taille > 5 && largeur(s, style.police(), taille) > largeurMax) taille -= 0.25f;
+    ligne(s, x, y + (style.taille() - taille) / 2, largeurMax, new Style(taille, style.police(), style.couleur(), style.align()));
+  }
+
   /** Écrit le texte sans le couper ; renvoie l'abscisse de fin (pour enchaîner plusieurs styles). */
   public float suite(String s, float x, float y, Style style) {
     String texte = t(s);

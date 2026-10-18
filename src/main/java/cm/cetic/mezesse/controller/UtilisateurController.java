@@ -1,6 +1,7 @@
 package cm.cetic.mezesse.controller;
 
 import cm.cetic.mezesse.dto.Message;
+import cm.cetic.mezesse.dto.UtilisateurDto.Carriere;
 import cm.cetic.mezesse.dto.UtilisateurDto.Enseignant;
 import cm.cetic.mezesse.dto.UtilisateurDto.Ligne;
 import cm.cetic.mezesse.dto.UtilisateurDto.Profil;
@@ -50,6 +51,13 @@ public class UtilisateurController {
   @SurveillantGeneral
   public Profil modifier(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id, @Valid @RequestBody Enseignant d) {
     return service.modifier(moi, id, d);
+  }
+
+  /** Carrière (matricule, grade, fonction, prise de service…) : SG, ou Proviseur avant une attestation. */
+  @PutMapping("/{id}/carriere")
+  @Direction
+  public Profil carriere(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id, @Valid @RequestBody Carriere c) {
+    return service.carriere(moi, id, c);
   }
 
   @PostMapping("/{id}/reinitialiser")

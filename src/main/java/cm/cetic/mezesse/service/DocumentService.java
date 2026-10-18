@@ -86,7 +86,7 @@ public class DocumentService {
           byte[] b = cle == null ? null : stockage.lire(cle);
           if (b != null) photos.put(i.getEleveId(), b);
         }
-        BulletinPdf.Contexte ctx = new BulletinPdf.Contexte(etab, donnees, rappels, comp, photos);
+        BulletinPdf.Contexte ctx = new BulletinPdf.Contexte(etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue());
         for (Inscription i : aImprimer) {
           pdf.nouvellePage();
           BulletinPdf.dessiner(pdf, ctx, i.getId());

@@ -1,6 +1,7 @@
 package cm.cetic.mezesse.service;
 
 import cm.cetic.mezesse.config.CeticProperties;
+import cm.cetic.mezesse.dto.UtilisateurDto.Carriere;
 import cm.cetic.mezesse.dto.UtilisateurDto.Enseignant;
 import cm.cetic.mezesse.dto.UtilisateurDto.Ligne;
 import cm.cetic.mezesse.dto.UtilisateurDto.MatiereEnseignee;
@@ -10,6 +11,7 @@ import cm.cetic.mezesse.entity.Classe;
 import cm.cetic.mezesse.entity.DomaineDecision;
 import cm.cetic.mezesse.entity.Matiere;
 import cm.cetic.mezesse.entity.Role;
+import cm.cetic.mezesse.entity.Sexe;
 import cm.cetic.mezesse.entity.Utilisateur;
 import cm.cetic.mezesse.exception.ApiException;
 import cm.cetic.mezesse.repository.ClasseRepository;
@@ -43,7 +45,11 @@ public class UtilisateurService {
   static Map<String, Object> champs(Utilisateur u) {
     return Donnees.objet(
         "nom", u.getNom(), "prenom", u.getPrenom(), "telephone", u.getTelephone(), "email", u.getEmail(),
-        "discipline", u.getDiscipline(), "actif", u.isActif());
+        "discipline", u.getDiscipline(), "actif", u.isActif(), "sexe", u.getSexe() == null ? null : u.getSexe().name(),
+        "matricule", u.getMatricule(), "grade", u.getGrade(), "fonction", u.getFonction(),
+        "datePriseService", u.getDatePriseService() == null ? null : u.getDatePriseService().toString(),
+        "dateEntreeFonctionPublique", u.getDateEntreeFonctionPublique() == null ? null : u.getDateEntreeFonctionPublique().toString(),
+        "acteNomination", u.getActeNomination());
   }
 
   public List<Ligne> liste(Role role, String anneeId) {
@@ -58,7 +64,8 @@ public class UtilisateurService {
             u ->
                 new Ligne(
                     u.getId(), u.getNom(), u.getPrenom(), u.getTelephone(), u.getEmail(), u.getRole(), u.isActif(),
-                    u.isDoitChangerMotDePasse(), u.getDiscipline(), u.getCreeLe(),
+                    u.isDoitChangerMotDePasse(), u.getDiscipline(), u.getSexe(), u.getMatricule(), u.getGrade(), u.getFonction(),
+                    u.getDatePriseService(), u.getDateEntreeFonctionPublique(), u.getActeNomination(), u.getCreeLe(),
                     parProf.getOrDefault(u.getId(), List.of()).stream()
                         .map(m -> new MatiereEnseignee(m.getId(), m.getNom(), m.getCoefficient(), new Reference(m.getClasse().getId(), m.getClasse().getNom())))
                         .toList(),
@@ -74,6 +81,7 @@ public class UtilisateurService {
   public Profil creer(UtilisateurConnecte moi, Enseignant d) {
     verifierContact(d);
     auth.verifierDisponibles("", d.telephone(), d.email());
+    if (d.carriere() != null) verifierMatricule("", d.carriere().matricule());
     Utilisateur u = new Utilisateur();
     appliquer(u, d);
     u.setRole(Role.PROFESSEUR);
@@ -94,6 +102,7 @@ public class UtilisateurService {
     if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le compte du Proviseur ne se modifie pas ici.");
     if (id.equals(moi.id()) && !d.actif()) throw ApiException.invalide("Vous ne pouvez pas désactiver votre propre compte.");
     auth.verifierDisponibles(id, d.telephone(), d.email());
+    if (d.carriere() != null) verifierMatricule(id, d.carriere().matricule());
     Map<String, Object> avant = champs(u);
     boolean etaitActif = u.isActif();
     appliquer(u, d);
@@ -135,5 +144,41 @@ public class UtilisateurService {
     u.setEmail(d.email());
     u.setDiscipline(d.discipline());
     u.setActif(d.actif());
+    if (d.carriere() != null) appliquer(u, d.carriere());
+  }
+
+  static void appliquer(Utilisateur u, Carriere c) {
+    u.setSexe(c.sexe() == null ? null : Sexe.valueOf(c.sexe()));
+    u.setMatricule(c.matricule());
+    u.setGrade(c.grade());
+    u.setFonction(c.fonction());
+    u.setDatePriseService(c.datePriseService());
+    u.setDateEntreeFonctionPublique(c.dateEntreeFonctionPublique());
+    u.setActeNomination(c.acteNomination());
+  }
+
+  /**
+   * Carrière d'un personnel (matricule, grade, fonction, prise de service…), complétée par le SG ou par
+   * le Proviseur au moment de délivrer une attestation. Le compte du Proviseur ne se modifie pas ici.
+   */
+  @Transactional
+  public Profil carriere(UtilisateurConnecte moi, String id, Carriere c) {
+    Utilisateur u = utilisateurs.findById(id).orElseThrow(() -> ApiException.introuvable("Compte"));
+    if (u.getRole() == Role.PROVISEUR && !id.equals(moi.id())) throw ApiException.interdit("Le compte du Proviseur ne se modifie pas ici.");
+    verifierMatricule(id, c.matricule());
+    Map<String, Object> avant = champs(u);
+    appliquer(u, c);
+    utilisateurs.saveAndFlush(u);
+    journal.consigner(
+        moi, DomaineDecision.ORGANISATION, "enseignant.modifier", "Carrière de " + u.nomComplet() + " mise à jour", "/enseignants",
+        Donnees.objet("id", id, "avant", avant, "apres", champs(u)));
+    return Profil.de(u);
+  }
+
+  /** Le matricule de la fonction publique identifie une personne : il ne sert pas deux fois. */
+  private void verifierMatricule(String id, String matricule) {
+    if (matricule != null && utilisateurs.findFirstByIdNotAndMatricule(id, matricule).isPresent()) {
+      throw ApiException.conflit("Ce matricule est déjà celui d'un autre compte.");
+    }
   }
 }

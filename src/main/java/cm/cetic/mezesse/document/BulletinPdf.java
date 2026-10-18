@@ -48,7 +48,8 @@ public final class BulletinPdf {
    * @param competences compétence visée par matière (bulletin de séquence)
    * @param photos photo par élève (id de l'élève)
    */
-  public record Contexte(Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos) {}
+  public record Contexte(
+      Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur) {}
 
   /** « Compétences très bien acquises » → « Très bien acquises » : le titre du bloc dit déjà de quoi il s'agit. */
   static String sansPrefixe(String s) {
@@ -296,6 +297,9 @@ public final class BulletinPdf {
       xs2 += ls[i];
     }
     if (pp != null) pdf.ligne(pp.nomComplet(), X0 + ls[0] + ls[1] + 3, y + 21, ls[2] - 6, Style.de(6.6f));
+    if (cm.cetic.mezesse.service.TableauHonneurService.auTableau(r.moyenne(), ctx.seuilTableauHonneur())) {
+      pdf.ligne("TABLEAU D'HONNEUR / HONOUR ROLL", X0 + 3, y + 22, ls[0] - 6, Style.de(8).gras().couleur("#a8801f"));
+    }
     if (p == Periode.A) {
       pdf.ligne("Décision du conseil de classe / Class council decision :", X0 + 3, y + hs - 22, ls[0] - 6, Style.de(6).gras());
       pdf.ligne("Admis(e) en classe supérieure  /  Redouble  /  Exclu(e)", X0 + 3, y + hs - 12, ls[0] - 6, Style.de(6).couleur(Couleurs.GRIS));

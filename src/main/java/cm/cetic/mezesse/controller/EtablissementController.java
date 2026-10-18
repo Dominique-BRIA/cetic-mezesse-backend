@@ -3,9 +3,11 @@ package cm.cetic.mezesse.controller;
 import cm.cetic.mezesse.dto.EtablissementDto.BaremeVue;
 import cm.cetic.mezesse.dto.EtablissementDto.Modification;
 import cm.cetic.mezesse.dto.EtablissementDto.Seuil;
+import cm.cetic.mezesse.dto.EtablissementDto.SeuilTableauHonneur;
 import cm.cetic.mezesse.dto.EtablissementDto.Vue;
 import cm.cetic.mezesse.dto.Message;
 import cm.cetic.mezesse.entity.TypeBareme;
+import cm.cetic.mezesse.security.Direction;
 import cm.cetic.mezesse.security.SurveillantGeneral;
 import cm.cetic.mezesse.security.UtilisateurConnecte;
 import cm.cetic.mezesse.service.EtablissementService;
@@ -36,6 +38,13 @@ public class EtablissementController {
   @SurveillantGeneral
   public Vue modifier(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody Modification d) {
     return service.modifier(moi, d);
+  }
+
+  /** Moyenne minimale du tableau d'honneur : Proviseur et SG. */
+  @PutMapping("/etablissement/tableau-honneur")
+  @Direction
+  public Vue seuilTableauHonneur(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody SeuilTableauHonneur d) {
+    return service.seuilTableauHonneur(moi, d.seuil());
   }
 
   @GetMapping("/baremes")

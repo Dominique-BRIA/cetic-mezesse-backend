@@ -30,4 +30,10 @@ public class Etablissement {
   private String boitePostale;
   private String telephone;
   private String prefixeMatricule = "CTM";
+
+  /** Sigle anglais (GTC) : « GTC MEZESSE » dans la colonne anglaise de l'en-tête. */
+  private String sigleEn;
+
+  /** Moyenne minimale pour figurer au tableau d'honneur (réglable par le Proviseur et le SG). */
+  private java.math.BigDecimal seuilTableauHonneur = java.math.BigDecimal.valueOf(12);
 }

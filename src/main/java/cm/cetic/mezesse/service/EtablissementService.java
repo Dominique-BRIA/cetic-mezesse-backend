@@ -50,7 +50,8 @@ public class EtablissementService {
         "nomFr", e.getNomFr(), "nomEn", e.getNomEn(), "sigle", e.getSigle(), "regionFr", e.getRegionFr(),
         "regionEn", e.getRegionEn(), "departementFr", e.getDepartementFr(), "departementEn", e.getDepartementEn(),
         "arrondissement", e.getArrondissement(), "localite", e.getLocalite(), "code", e.getCode(),
-        "boitePostale", e.getBoitePostale(), "telephone", e.getTelephone(), "prefixeMatricule", e.getPrefixeMatricule());
+        "boitePostale", e.getBoitePostale(), "telephone", e.getTelephone(), "prefixeMatricule", e.getPrefixeMatricule(),
+        "sigleEn", e.getSigleEn());
   }
 
   @Transactional
@@ -71,10 +72,24 @@ public class EtablissementService {
     e.setBoitePostale(d.boitePostale());
     e.setTelephone(d.telephone());
     e.setPrefixeMatricule(d.prefixeMatricule());
+    e.setSigleEn(d.sigleEn());
     e = etablissements.save(e);
     journal.consigner(
         moi, DomaineDecision.ADMINISTRATION, "etablissement.modifier", "Modification des informations de l'établissement", "/parametres",
         Donnees.objet("avant", avant, "apres", champs(e)));
+    return Vue.de(e);
+  }
+
+  /** Moyenne minimale du tableau d'honneur, réglée par le Proviseur ou le SG. */
+  @Transactional
+  public Vue seuilTableauHonneur(UtilisateurConnecte moi, double seuil) {
+    Etablissement e = requis();
+    BigDecimal avant = e.getSeuilTableauHonneur();
+    e.setSeuilTableauHonneur(BigDecimal.valueOf(seuil).setScale(2, java.math.RoundingMode.HALF_UP));
+    journal.consigner(
+        moi, DomaineDecision.ADMINISTRATION, "tableauhonneur.seuil",
+        "Tableau d'honneur : moyenne minimale " + Nombres.fr(avant.doubleValue()) + " → " + Nombres.fr(seuil), "/parametres",
+        Donnees.objet("avant", avant.doubleValue(), "apres", seuil));
     return Vue.de(e);
   }
 

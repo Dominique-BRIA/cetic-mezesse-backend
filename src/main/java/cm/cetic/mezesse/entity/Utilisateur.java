@@ -42,6 +42,28 @@ public class Utilisateur {
   /** Ce qu'enseigne le professeur, à titre indicatif. */
   private String discipline;
 
+  // Carrière, imprimée sur les attestations de présence effective au poste.
+  @Enumerated(EnumType.STRING)
+  @JdbcTypeCode(SqlTypes.NAMED_ENUM)
+  private Sexe sexe;
+
+  /** Matricule de la fonction publique (1034573P). */
+  private String matricule;
+
+  /** PCEG, PLEG, PCET, PLET… */
+  private String grade;
+
+  /** « Professeur de mathématiques », « Surveillant Général »… */
+  private String fonction;
+
+  /** Prise de service dans l'établissement. */
+  private java.time.LocalDate datePriseService;
+
+  private java.time.LocalDate dateEntreeFonctionPublique;
+
+  /** Acte de nomination ou d'affectation : « Décision n° 0123/MINESEC/… du 12/09/2020 ». */
+  private String acteNomination;
+
   @Column(updatable = false)
   private Instant creeLe;
 

@@ -85,7 +85,8 @@ public class AnnulationService {
           Map.entry("sequence.ouvrir", "La saisie des notes sera refermée."),
           Map.entry("sequence.fermer", "La saisie des notes sera rouverte."),
           Map.entry("etablissement.modifier", "Les informations de l'établissement reprendront leurs valeurs précédentes."),
-          Map.entry("bareme.modifier", "L'ancien barème sera rétabli."));
+          Map.entry("bareme.modifier", "L'ancien barème sera rétabli."),
+          Map.entry("tableauhonneur.seuil", "Le tableau d'honneur reprendra son ancienne moyenne minimale."));
 
   /** Ce qui a été défait, et les fichiers à retirer du stockage une fois la transaction validée. */
   public record Resultat(String effet, List<String> fichiersASupprimer) {
@@ -199,6 +200,7 @@ public class AnnulationService {
       case "annee.activer" -> anneeActivee(a);
       case "sequence.ouvrir", "sequence.fermer" -> saisieChangee(a);
       case "etablissement.modifier" -> etablissementModifie(a);
+      case "tableauhonneur.seuil" -> seuilModifie(a);
       case "bareme.modifier" -> baremeModifie(a);
       default -> throw ApiException.conflit("Ce type de décision ne peut pas être annulé automatiquement.");
     };
@@ -461,6 +463,13 @@ public class AnnulationService {
     if (data.containsKey("email")) u.setEmail(texte(data.get("email")));
     if (data.containsKey("discipline")) u.setDiscipline(texte(data.get("discipline")));
     if (data.containsKey("actif")) u.setActif(Boolean.TRUE.equals(data.get("actif")));
+    if (data.containsKey("sexe")) u.setSexe(data.get("sexe") == null ? null : Sexe.valueOf(texte(data.get("sexe"))));
+    if (data.containsKey("matricule")) u.setMatricule(texte(data.get("matricule")));
+    if (data.containsKey("grade")) u.setGrade(texte(data.get("grade")));
+    if (data.containsKey("fonction")) u.setFonction(texte(data.get("fonction")));
+    if (data.containsKey("datePriseService")) u.setDatePriseService(date(data.get("datePriseService")));
+    if (data.containsKey("dateEntreeFonctionPublique")) u.setDateEntreeFonctionPublique(date(data.get("dateEntreeFonctionPublique")));
+    if (data.containsKey("acteNomination")) u.setActeNomination(texte(data.get("acteNomination")));
     return new Resultat("Le compte de " + u.nomComplet() + " a repris ses valeurs précédentes.");
   }
 
@@ -629,10 +638,19 @@ public class AnnulationService {
             case "boitePostale" -> e.setBoitePostale(t);
             case "telephone" -> e.setTelephone(t);
             case "prefixeMatricule" -> e.setPrefixeMatricule(t);
+            case "sigleEn" -> e.setSigleEn(t);
             default -> {}
           }
         });
     return new Resultat("Les informations de l'établissement ont repris leurs valeurs précédentes.");
+  }
+
+  private Resultat seuilModifie(Map<String, Object> a) {
+    Etablissement e = etablissements.findById(Etablissement.ID).orElse(null);
+    if (e == null) return new Resultat("Il n'y avait pas d'informations à rétablir.");
+    if (!egal(e.getSeuilTableauHonneur(), a.get("apres"))) return RIEN;
+    e.setSeuilTableauHonneur(new BigDecimal(a.get("avant").toString()));
+    return new Resultat("Le tableau d'honneur part de nouveau de " + cm.cetic.mezesse.util.Nombres.fr(e.getSeuilTableauHonneur().doubleValue()) + " de moyenne.");
   }
 
   @SuppressWarnings("unchecked")
