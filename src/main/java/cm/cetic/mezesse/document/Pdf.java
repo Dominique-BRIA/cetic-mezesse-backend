@@ -443,10 +443,10 @@ public class Pdf implements AutoCloseable {
 
   private static byte[] logo;
 
-  /** Sceau du CETIC de Mezesse (JPEG 300 px). */
+  /** Emblème du CETIC de Mezesse (PNG 360 px, fond transparent). */
   public static synchronized byte[] logo() {
     if (logo == null) {
-      try (InputStream in = Pdf.class.getResourceAsStream("/documents/logo.jpg")) {
+      try (InputStream in = Pdf.class.getResourceAsStream("/documents/logo.png")) {
         logo = in.readAllBytes();
       } catch (IOException e) {
         throw new UncheckedIOException(e);
