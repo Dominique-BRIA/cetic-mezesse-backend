@@ -480,6 +480,8 @@ public class AnnulationService {
     }
     u.setMotDePasse(texte(a.get("avantHash")));
     u.setDoitChangerMotDePasse(Boolean.TRUE.equals(a.get("avantDoitChanger")));
+    // Une session ouverte entre-temps avec « password » est fermée.
+    u.fermerSessions();
     return new Resultat(u.nomComplet() + " retrouve son ancien mot de passe.");
   }
 

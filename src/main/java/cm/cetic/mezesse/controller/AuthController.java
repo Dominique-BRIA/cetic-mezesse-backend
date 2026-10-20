@@ -6,12 +6,17 @@ import cm.cetic.mezesse.dto.UtilisateurDto.Connexion;
 import cm.cetic.mezesse.dto.UtilisateurDto.ModificationProfil;
 import cm.cetic.mezesse.dto.UtilisateurDto.Profil;
 import cm.cetic.mezesse.dto.UtilisateurDto.ReponseConnexion;
+import cm.cetic.mezesse.security.JetonService;
+import cm.cetic.mezesse.security.RenouvellementJetonFilter;
 import cm.cetic.mezesse.security.UtilisateurConnecte;
 import cm.cetic.mezesse.service.AuthService;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.annotation.CurrentSecurityContext;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -47,9 +52,15 @@ public class AuthController {
     return auth.modifierProfil(moi, d);
   }
 
+  /** Les autres sessions du compte sont fermées ; celle-ci continue avec le jeton renvoyé dans X-Jeton. */
   @PostMapping("/auth/mot-de-passe")
-  public Message changerMotDePasse(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody ChangementMotDePasse d) {
-    auth.changerMotDePasse(moi, d);
+  public Message changerMotDePasse(
+      @AuthenticationPrincipal UtilisateurConnecte moi,
+      @CurrentSecurityContext(expression = "authentication.credentials") Jwt jeton,
+      @Valid @RequestBody ChangementMotDePasse d,
+      HttpServletResponse res) {
+    // setHeader remplace le jeton renouvelé par RenouvellementJetonFilter, devenu invalide.
+    res.setHeader(RenouvellementJetonFilter.ENTETE, auth.changerMotDePasse(moi, JetonService.prolongee(jeton), d));
     return new Message("Mot de passe modifié.");
   }
 }

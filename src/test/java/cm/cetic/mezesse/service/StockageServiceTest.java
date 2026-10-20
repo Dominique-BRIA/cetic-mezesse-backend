@@ -13,7 +13,8 @@ import org.junit.jupiter.api.io.TempDir;
 class StockageServiceTest {
 
   private static CeticProperties proprietes(CeticProperties.B2 b2, String dossier) {
-    return new CeticProperties("secret", Duration.ofHours(12), "", "password", dossier, b2, null);
+    var session = new CeticProperties.Session(Duration.ofHours(12), Duration.ofDays(90), Duration.ofHours(1));
+    return new CeticProperties("secret", session, "", "password", dossier, b2, null);
   }
 
   @Test

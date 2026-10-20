@@ -38,7 +38,7 @@ public class AuthService {
       throw new ApiException(HttpStatus.UNAUTHORIZED, "Identifiant ou mot de passe incorrect.");
     }
     if (!u.isActif()) throw ApiException.interdit("Ce compte est désactivé.");
-    return new ReponseConnexion(jetons.emettre(u), ProfilComplet.de(u));
+    return new ReponseConnexion(jetons.emettre(u, c.prolongee()), ProfilComplet.de(u));
   }
 
   public Profil moi(UtilisateurConnecte moi) {
@@ -69,13 +69,19 @@ public class AuthService {
     return Profil.de(utilisateurs.saveAndFlush(u));
   }
 
+  /**
+   * Ferme les sessions ouvertes sur les autres appareils (RG-04) et renvoie le jeton qui garde
+   * celle-ci ouverte, avec la même durée.
+   */
   @Transactional
-  public void changerMotDePasse(UtilisateurConnecte moi, ChangementMotDePasse d) {
+  public String changerMotDePasse(UtilisateurConnecte moi, boolean prolongee, ChangementMotDePasse d) {
     if (d.nouveau().equals("password")) throw ApiException.invalide("Choisissez un mot de passe différent de « password ».");
     Utilisateur u = charger(moi.id());
     if (!motsDePasse.matches(d.ancien(), u.getMotDePasse())) throw ApiException.invalide("Mot de passe actuel incorrect.");
     u.setMotDePasse(motsDePasse.encode(d.nouveau()));
     u.setDoitChangerMotDePasse(false);
+    u.fermerSessions();
+    return jetons.emettre(u, prolongee);
   }
 
   /** Le téléphone et l'e-mail identifient un compte : ils ne peuvent pas servir deux fois. */

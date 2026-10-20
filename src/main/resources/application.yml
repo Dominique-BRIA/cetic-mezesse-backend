@@ -53,7 +53,12 @@ spring:
 
 cetic:
   jwt-secret: ${JWT_SECRET}
-  duree-jeton: 12h
+  # RG-04 : une session prend fin après 12 h sans utilisation, ou 90 jours avec « Rester connecté ».
+  # Le jeton est renouvelé à chaque requête dès qu'il a plus d'une heure.
+  session:
+    courte: 12h
+    prolongee: 90d
+    renouvellement: 1h
   cors-origins: ${CORS_ORIGINS:}
   # Mot de passe donné à un compte après réinitialisation par le SG (décision du 16/10/2026).
   mot-de-passe-reinitialise: password

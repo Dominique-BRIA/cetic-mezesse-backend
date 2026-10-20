@@ -9,12 +9,18 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "cetic")
 public record CeticProperties(
     String jwtSecret,
-    Duration dureeJeton,
+    Session session,
     String corsOrigins,
     String motDePasseReinitialise,
     String dossierPhotos,
     B2 b2,
     Amorcage amorcage) {
+
+  /**
+   * Durées de session (RG-04), comptées depuis la dernière utilisation : le jeton est renouvelé à
+   * chaque requête dès qu'il a l'âge de {@code renouvellement}.
+   */
+  public record Session(Duration courte, Duration prolongee, Duration renouvellement) {}
 
   public record B2(String endpoint, String keyId, String applicationKey, String bucket) {
     public boolean configure() {

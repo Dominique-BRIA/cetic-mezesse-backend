@@ -1,8 +1,10 @@
 package cm.cetic.mezesse.config;
 
 import cm.cetic.mezesse.security.ConvertisseurJeton;
+import cm.cetic.mezesse.security.JetonService;
 import cm.cetic.mezesse.security.LecteurJeton;
 import cm.cetic.mezesse.security.LimiteConnexionFilter;
+import cm.cetic.mezesse.security.RenouvellementJetonFilter;
 import cm.cetic.mezesse.security.ReponsesSecurite;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
@@ -47,7 +49,11 @@ public class SecurityConfig {
 
   @Bean
   SecurityFilterChain filtres(
-      HttpSecurity http, ConvertisseurJeton convertisseur, ReponsesSecurite reponses, CorsConfigurationSource cors)
+      HttpSecurity http,
+      ConvertisseurJeton convertisseur,
+      JetonService jetons,
+      ReponsesSecurite reponses,
+      CorsConfigurationSource cors)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
         .cors(c -> c.configurationSource(cors))
@@ -79,6 +85,7 @@ public class SecurityConfig {
                     .crossOriginResourcePolicy(c -> c.policy(CrossOriginResourcePolicy.CROSS_ORIGIN))
                     .httpStrictTransportSecurity(s -> s.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
         .addFilterBefore(new LimiteConnexionFilter(reponses), BearerTokenAuthenticationFilter.class)
+        .addFilterAfter(new RenouvellementJetonFilter(jetons), BearerTokenAuthenticationFilter.class)
         .build();
   }
 
@@ -90,7 +97,7 @@ public class SecurityConfig {
     else c.setAllowedOrigins(origines);
     c.setAllowedMethods(List.of("GET", "HEAD", "POST", "PUT", "PATCH", "DELETE"));
     c.addAllowedHeader("*");
-    c.setExposedHeaders(List.of("Content-Disposition", "X-Cartes-Ecartees"));
+    c.setExposedHeaders(List.of("Content-Disposition", "X-Cartes-Ecartees", RenouvellementJetonFilter.ENTETE));
     c.setMaxAge(600L);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", c);

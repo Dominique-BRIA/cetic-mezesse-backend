@@ -39,6 +39,9 @@ public class Utilisateur {
   private boolean actif = true;
   private boolean doitChangerMotDePasse;
 
+  /** Inscrite dans les jetons : un jeton d'une version antérieure est refusé (RG-04). */
+  private int versionSession;
+
   /** Ce qu'enseigne le professeur, à titre indicatif. */
   private String discipline;
 
@@ -82,5 +85,10 @@ public class Utilisateur {
 
   public String nomComplet() {
     return prenom + " " + nom;
+  }
+
+  /** Ferme les sessions ouvertes du compte, sur tous les appareils (changement de mot de passe). */
+  public void fermerSessions() {
+    versionSession++;
   }
 }

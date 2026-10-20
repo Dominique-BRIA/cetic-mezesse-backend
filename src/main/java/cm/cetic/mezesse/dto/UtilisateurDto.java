@@ -71,9 +71,17 @@ public final class UtilisateurDto {
     }
   }
 
-  public record Connexion(@NotBlank(message = "obligatoire") String identifiant, @NotBlank(message = "obligatoire") @JsonDeserialize(using = StringDeserializer.class) String motDePasse) {
+  /** {@code resterConnecte} absent (anciennes versions de l'application) : session prolongée. */
+  public record Connexion(
+      @NotBlank(message = "obligatoire") String identifiant,
+      @NotBlank(message = "obligatoire") @JsonDeserialize(using = StringDeserializer.class) String motDePasse,
+      Boolean resterConnecte) {
     public Connexion {
       identifiant = Textes.nettoyer(identifiant);
+    }
+
+    public boolean prolongee() {
+      return resterConnecte == null || resterConnecte;
     }
   }
 

@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 
 /**
  * Transforme un jeton valide en utilisateur connecté. Le compte est relu en base à chaque requête :
- * un compte désactivé perd l'accès immédiatement, et un changement de rôle s'applique tout de suite.
+ * un compte désactivé perd l'accès immédiatement, un changement de rôle s'applique tout de suite, et
+ * un jeton émis avant un changement de mot de passe (version de session antérieure) est refusé.
  */
 @Component
 @RequiredArgsConstructor
@@ -26,6 +27,7 @@ public class ConvertisseurJeton implements Converter<Jwt, AbstractAuthentication
     if (id == null) throw new BadCredentialsException("Jeton sans identifiant");
     Utilisateur u = utilisateurs.findById(id).orElse(null);
     if (u == null || !u.isActif()) throw new DisabledException("Compte désactivé.");
+    if (JetonService.version(jeton) != u.getVersionSession()) throw new BadCredentialsException("Session fermée");
     UtilisateurConnecte connecte =
         new UtilisateurConnecte(u.getId(), u.getRole(), jeton.getClaimAsString("nom"), jeton.getClaimAsString("prenom"));
     return new AuthentificationJeton(connecte, jeton);

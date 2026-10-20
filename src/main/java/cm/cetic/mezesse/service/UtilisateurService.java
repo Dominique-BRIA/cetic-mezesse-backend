@@ -127,6 +127,8 @@ public class UtilisateurService {
     boolean avantDoitChanger = u.isDoitChangerMotDePasse();
     u.setMotDePasse(motsDePasse.encode(proprietes.motDePasseReinitialise()));
     u.setDoitChangerMotDePasse(true);
+    // Les sessions ouvertes avec l'ancien mot de passe sont fermées (RG-04).
+    u.fermerSessions();
     journal.consigner(
         moi, DomaineDecision.ORGANISATION, "enseignant.reinitialiser", "Réinitialisation du mot de passe de " + u.nomComplet(), "/enseignants",
         Donnees.objet("id", id, "avantHash", avantHash, "avantDoitChanger", avantDoitChanger, "apresHash", u.getMotDePasse()));
