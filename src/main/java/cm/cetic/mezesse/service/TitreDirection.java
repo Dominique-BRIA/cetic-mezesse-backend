@@ -2,6 +2,7 @@ package cm.cetic.mezesse.service;
 
 import cm.cetic.mezesse.entity.Role;
 import cm.cetic.mezesse.entity.Sexe;
+import cm.cetic.mezesse.entity.Utilisateur;
 import cm.cetic.mezesse.repository.UtilisateurRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -29,10 +30,12 @@ public class TitreDirection {
 
   /** Sexe du chef d'établissement en fonction (compte actif), null s'il n'est pas renseigné. */
   public Sexe sexeEnFonction() {
+    // La civilité se lit après le choix du compte : findFirst() lève une exception sur une valeur
+    // nulle, ce qui faisait échouer cartes et tableau d'honneur quand elle n'était pas renseignée.
     return utilisateurs.findByRoleOrderByNomAscPrenomAsc(Role.PROVISEUR).stream()
-        .filter(u -> u.isActif())
-        .map(u -> u.getSexe())
+        .filter(Utilisateur::isActif)
         .findFirst()
+        .map(Utilisateur::getSexe)
         .orElse(null);
   }
 
