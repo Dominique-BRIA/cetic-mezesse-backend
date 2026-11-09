@@ -1,5 +1,6 @@
 package cm.cetic.mezesse.config;
 
+import cm.cetic.mezesse.entity.Role;
 import cm.cetic.mezesse.security.ConvertisseurJeton;
 import cm.cetic.mezesse.security.JetonService;
 import cm.cetic.mezesse.security.LecteurJeton;
@@ -14,10 +15,14 @@ import javax.crypto.spec.SecretKeySpec;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AnonymousAuthenticationToken;
+import org.springframework.security.authorization.AuthorizationDecision;
+import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -27,6 +32,7 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.RequestAuthorizationContext;
 import org.springframework.security.web.header.writers.CrossOriginOpenerPolicyHeaderWriter.CrossOriginOpenerPolicy;
 import org.springframework.security.web.header.writers.CrossOriginResourcePolicyHeaderWriter.CrossOriginResourcePolicy;
 import org.springframework.security.web.header.writers.ReferrerPolicyHeaderWriter.ReferrerPolicy;
@@ -47,6 +53,18 @@ public class SecurityConfig {
           + "img-src 'self' data:;object-src 'none';script-src 'self';script-src-attr 'none';"
           + "style-src 'self' https: 'unsafe-inline';upgrade-insecure-requests";
 
+  /** Compte connecté de l'école : un jeton de la console technique n'ouvre aucune route de l'école. */
+  private static final AuthorizationManager<RequestAuthorizationContext> COMPTE_ECOLE =
+      (authentification, contexte) -> {
+        Authentication a = authentification.get();
+        boolean permis =
+            a != null
+                && a.isAuthenticated()
+                && !(a instanceof AnonymousAuthenticationToken)
+                && a.getAuthorities().stream().noneMatch(g -> g.getAuthority().equals("ROLE_" + Role.SUPER_ADMIN.name()));
+        return new AuthorizationDecision(permis);
+      };
+
   @Bean
   SecurityFilterChain filtres(
       HttpSecurity http,
@@ -66,9 +84,11 @@ public class SecurityConfig {
             a ->
                 a.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/sante").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/auth/connexion").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/auth/connexion", "/api/console/auth/connexion", "/api/appareils/plantages").permitAll()
+                    .requestMatchers(HttpMethod.GET, "/api/mises-a-jour/politique").permitAll()
                     .requestMatchers("/error").permitAll()
-                    .anyRequest().authenticated())
+                    .requestMatchers("/api/console/**").hasRole(Role.SUPER_ADMIN.name())
+                    .anyRequest().access(COMPTE_ECOLE))
         .oauth2ResourceServer(
             o ->
                 o.bearerTokenResolver(new LecteurJeton())

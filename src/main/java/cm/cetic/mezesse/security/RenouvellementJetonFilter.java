@@ -32,7 +32,10 @@ public class RenouvellementJetonFilter extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chaine)
       throws ServletException, IOException {
     Authentication a = SecurityContextHolder.getContext().getAuthentication();
-    if (a instanceof AuthentificationJeton j && req.getHeader(HttpHeaders.AUTHORIZATION) != null && jetons.aRenouveler(j.getCredentials())) {
+    if (a instanceof AuthentificationJeton j
+        && req.getHeader(HttpHeaders.AUTHORIZATION) != null
+        && !JetonService.console(j.getCredentials())
+        && jetons.aRenouveler(j.getCredentials())) {
       res.setHeader(ENTETE, jetons.renouveler(j.getPrincipal(), j.getCredentials()));
     }
     chaine.doFilter(req, res);

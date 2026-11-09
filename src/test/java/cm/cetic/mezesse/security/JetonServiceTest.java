@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 import cm.cetic.mezesse.config.CeticProperties;
 import cm.cetic.mezesse.entity.Role;
 import cm.cetic.mezesse.entity.Utilisateur;
+import cm.cetic.mezesse.repository.AdminConsoleRepository;
 import cm.cetic.mezesse.repository.UtilisateurRepository;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import java.nio.charset.StandardCharsets;
@@ -101,7 +102,7 @@ class JetonServiceTest {
   void un_jeton_d_une_version_anterieure_est_refuse() {
     UtilisateurRepository utilisateurs = mock(UtilisateurRepository.class);
     when(utilisateurs.findById("u1")).thenReturn(Optional.of(directeur(1)));
-    ConvertisseurJeton convertisseur = new ConvertisseurJeton(utilisateurs);
+    ConvertisseurJeton convertisseur = new ConvertisseurJeton(utilisateurs, mock(AdminConsoleRepository.class));
 
     assertThat(convertisseur.convert(jetonEmisIlYa(Duration.ZERO, 1, true)).getName()).isEqualTo("u1");
     assertThatThrownBy(() -> convertisseur.convert(jetonEmisIlYa(Duration.ZERO, 0, true))).isInstanceOf(BadCredentialsException.class);

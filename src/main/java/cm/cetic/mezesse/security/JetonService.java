@@ -1,8 +1,10 @@
 package cm.cetic.mezesse.security;
 
 import cm.cetic.mezesse.config.CeticProperties;
+import cm.cetic.mezesse.entity.AdminConsole;
 import cm.cetic.mezesse.entity.Role;
 import cm.cetic.mezesse.entity.Utilisateur;
+import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -31,9 +33,33 @@ public class JetonService {
 
   static final String PROLONGEE = "prolongee";
   static final String VERSION = "version";
+  static final String PORTEE = "portee";
+  static final String PORTEE_CONSOLE = "console";
+  private static final Duration DUREE_CONSOLE = Duration.ofHours(8);
 
   private final JwtEncoder encodeur;
   private final CeticProperties proprietes;
+
+  /** Jeton de la console technique : 8 heures, jamais renouvelé, sans effet sur les routes de l'école. */
+  public String emettreConsole(AdminConsole a) {
+    Instant maintenant = Instant.now();
+    JwtClaimsSet revendications =
+        JwtClaimsSet.builder()
+            .subject(a.getId())
+            .claim("id", a.getId())
+            .claim("role", Role.SUPER_ADMIN.name())
+            .claim(PORTEE, PORTEE_CONSOLE)
+            .claim(VERSION, a.getVersionSession())
+            .issuedAt(maintenant)
+            .expiresAt(maintenant.plus(DUREE_CONSOLE))
+            .build();
+    JwsHeader entete = JwsHeader.with(MacAlgorithm.HS256).type("JWT").build();
+    return encodeur.encode(JwtEncoderParameters.from(entete, revendications)).getTokenValue();
+  }
+
+  public static boolean console(Jwt jeton) {
+    return PORTEE_CONSOLE.equals(jeton.getClaimAsString(PORTEE));
+  }
 
   public String emettre(Utilisateur u, boolean prolongee) {
     return emettre(u.getId(), u.getRole(), u.getNom(), u.getPrenom(), u.getVersionSession(), prolongee);

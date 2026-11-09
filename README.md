@@ -53,6 +53,15 @@ Deux formats diffèrent, sans effet sur les clients actuels :
 - les dates de naissance et de renvoi s'écrivent `2011-05-26` au lieu de `2011-05-26T00:00:00.000Z` ;
 - les nombres décimaux s'écrivent `16.0` au lieu de `16`.
 
+## Console technique
+
+Le site [cetic-mezesse-console](../cetic-mezesse-console) est le poste de pilotage du développeur : parc d'appareils, plantages, politique de mise à jour, journal. Ses routes sont `/api/console/...`, réservées au rôle `SUPER_ADMIN`. Ses comptes sont dans la table `AdminConsole`, hors des comptes de l'école : un jeton de console n'ouvre aucune route de l'école, et l'inverse non plus.
+
+- **Premier compte** : variables `CONSOLE_ADMIN_EMAIL` et `CONSOLE_ADMIN_MOT_DE_PASSE` (12 caractères au moins), lues au démarrage si la table est vide. Elles ne servent plus ensuite.
+- **Double authentification obligatoire** : à la première connexion, la console affiche le QR code à scanner. Cinq échecs verrouillent le compte un quart d'heure.
+- **CORS** : ajouter l'adresse de la console à `CORS_ORIGINS`.
+- **Routes appelées par le mobile** : `POST /api/appareils/signal` (connecté), `POST /api/appareils/plantages` et `GET /api/mises-a-jour/politique` (publiques, plantages limités par adresse).
+
 ## Déploiement sur Azure
 
 Le déploiement est automatique. À chaque push sur `main`, le workflow « API Azure » (`.github/workflows/deploiement.yml`) :
