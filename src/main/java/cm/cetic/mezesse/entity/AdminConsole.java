@@ -10,7 +10,7 @@ import java.time.Instant;
 import lombok.Getter;
 import lombok.Setter;
 
-/** Compte de la console technique : le développeur, hors des comptes de l'école. Double authentification obligatoire. */
+/** Compte de la console technique : le développeur, hors des comptes de l'école. */
 @Entity
 @Table(name = "AdminConsole")
 @Getter
@@ -24,15 +24,6 @@ public class AdminConsole {
 
   @Column(name = "motDePasse")
   private String motDePasse;
-
-  /** Secret de l'application d'authentification, en base 32 ; créé à la première connexion. */
-  private String totpSecret;
-
-  /** Vrai une fois le premier code confirmé. */
-  private boolean totpActif;
-
-  /** Dernier pas de 30 s accepté : un code déjà utilisé ne resert pas. */
-  private long totpDernierPas;
 
   private boolean actif = true;
   private int echecs;

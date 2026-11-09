@@ -1,18 +1,14 @@
 package cm.cetic.mezesse.service;
 
 import cm.cetic.mezesse.dto.ConsoleDto.Connexion;
-import cm.cetic.mezesse.dto.ConsoleDto.Enrolement;
 import cm.cetic.mezesse.dto.ConsoleDto.Moi;
 import cm.cetic.mezesse.dto.ConsoleDto.ReponseConnexion;
 import cm.cetic.mezesse.entity.AdminConsole;
 import cm.cetic.mezesse.exception.ApiException;
 import cm.cetic.mezesse.repository.AdminConsoleRepository;
 import cm.cetic.mezesse.security.JetonService;
-import cm.cetic.mezesse.security.Totp;
 import cm.cetic.mezesse.security.UtilisateurConnecte;
 import cm.cetic.mezesse.util.Horloge;
-import java.net.URLEncoder;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.Instant;
 import lombok.RequiredArgsConstructor;
@@ -26,8 +22,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Connexion à la console technique : mot de passe puis code à usage unique, obligatoire. Cinq échecs
- * verrouillent le compte un quart d'heure. Le premier compte naît de deux variables d'environnement,
+ * Connexion à la console technique par e-mail et mot de passe. Cinq échecs verrouillent le compte
+ * un quart d'heure. Le premier compte naît de deux variables d'environnement,
  * CONSOLE_ADMIN_EMAIL et CONSOLE_ADMIN_MOT_DE_PASSE, au démarrage de l'API si aucun n'existe.
  */
 @Slf4j
@@ -82,22 +78,10 @@ public class ConsoleAuthService implements ApplicationRunner {
     }
     if (!a.isActif()) throw ApiException.interdit("Ce compte est désactivé.");
 
-    // Première connexion : le secret est donné une fois, tant que le premier code n'est pas confirmé.
-    if (!a.isTotpActif() && c.code() == null) {
-      if (a.getTotpSecret() == null) a.setTotpSecret(Totp.nouveauSecret());
-      return new ReponseConnexion(null, null, new Enrolement(a.getTotpSecret(), uri(a)));
-    }
-    long pas = a.getTotpSecret() == null ? -1 : Totp.verifier(a.getTotpSecret(), c.code(), maintenant, a.getTotpDernierPas());
-    if (pas < 0) {
-      echec(a, maintenant, "code de vérification");
-      throw new ApiException(HttpStatus.UNAUTHORIZED, "Code de vérification incorrect.");
-    }
-    a.setTotpActif(true);
-    a.setTotpDernierPas(pas);
     a.setEchecs(0);
     a.setVerrouilleJusqua(null);
     journal.noter(a.getEmail(), "connexion", null, null);
-    return new ReponseConnexion(jetons.emettreConsole(a), moi(a), null);
+    return new ReponseConnexion(jetons.emettreConsole(a), moi(a));
   }
 
   @Transactional(readOnly = true)
@@ -122,11 +106,5 @@ public class ConsoleAuthService implements ApplicationRunner {
 
   private static ApiException refus() {
     return new ApiException(HttpStatus.UNAUTHORIZED, "Identifiant ou mot de passe incorrect.");
-  }
-
-  private static String uri(AdminConsole a) {
-    String emetteur = URLEncoder.encode("CETIC Console", StandardCharsets.UTF_8).replace("+", "%20");
-    String compte = URLEncoder.encode(a.getEmail(), StandardCharsets.UTF_8);
-    return "otpauth://totp/" + emetteur + ":" + compte + "?secret=" + a.getTotpSecret() + "&issuer=" + emetteur + "&algorithm=SHA1&digits=6&period=30";
   }
 }

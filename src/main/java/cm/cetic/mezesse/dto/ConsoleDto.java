@@ -16,24 +16,15 @@ public final class ConsoleDto {
 
   private ConsoleDto() {}
 
-  /** Sans code : mot de passe vérifié seul, le secret est donné si la double authentification reste à activer. */
-  public record Connexion(
-      @NotBlank(message = "obligatoire") String email,
-      @NotBlank(message = "obligatoire") String motDePasse,
-      String code) {
+  public record Connexion(@NotBlank(message = "obligatoire") String email, @NotBlank(message = "obligatoire") String motDePasse) {
     public Connexion {
       email = Textes.email(email);
-      code = Textes.optionnel(code);
     }
   }
 
   public record Moi(String id, String email, String nom) {}
 
-  /** À saisir dans l'application d'authentification, une seule fois. */
-  public record Enrolement(String secret, String uri) {}
-
-  /** Soit une session ouverte (jeton), soit l'enrôlement à terminer. */
-  public record ReponseConnexion(String jeton, Moi admin, Enrolement enrolement) {}
+  public record ReponseConnexion(String jeton, Moi admin) {}
 
   public record VersionRepartie(int numeroVersion, String nomVersion, long appareils) {}
 
