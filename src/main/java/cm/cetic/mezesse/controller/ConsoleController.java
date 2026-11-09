@@ -1,5 +1,6 @@
 package cm.cetic.mezesse.controller;
 
+import cm.cetic.mezesse.dto.ConsoleDto.Analytique;
 import cm.cetic.mezesse.dto.ConsoleDto.Apercu;
 import cm.cetic.mezesse.dto.ConsoleDto.Connexion;
 import cm.cetic.mezesse.dto.ConsoleDto.DetailPlantage;
@@ -53,6 +54,11 @@ public class ConsoleController {
   @GetMapping("/apercu")
   public Apercu apercu() {
     return service.apercu();
+  }
+
+  @GetMapping("/analytique")
+  public Analytique analytique(@RequestParam(defaultValue = "30") int jours) {
+    return service.analytique(jours);
   }
 
   @GetMapping("/appareils")

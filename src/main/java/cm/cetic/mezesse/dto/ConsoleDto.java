@@ -9,7 +9,9 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /** Échanges entre l'API et la console technique. */
 public final class ConsoleDto {
@@ -37,6 +39,17 @@ public final class ConsoleDto {
       long plantagesOuverts,
       List<VersionRepartie> repartition,
       Politique politique) {}
+
+  /** Un jour de la courbe. Les jours sans activité sont présents, à zéro. */
+  public record JourAnalytique(LocalDate jour, long actifs, long nouveaux, Map<Integer, Long> parVersion, Map<String, Long> plantages) {}
+
+  public record Cumul(long actifs, long nouveaux, long plantages) {}
+
+  public record Part(String libelle, long valeur) {}
+
+  public record RoleParc(String role, long equipes, long sansAppareil) {}
+
+  public record Analytique(int jours, Cumul periode, Cumul precedente, List<JourAnalytique> serie, List<Part> modeles, List<Part> versionsAndroid, List<RoleParc> roles) {}
 
   public record LigneAppareil(
       String installationId,

@@ -1,10 +1,12 @@
 package cm.cetic.mezesse.service;
 
+import cm.cetic.mezesse.document.EnteteOfficiel;
 import cm.cetic.mezesse.dto.AppareilDto.Rapport;
 import cm.cetic.mezesse.dto.AppareilDto.Signal;
 import cm.cetic.mezesse.entity.Appareil;
 import cm.cetic.mezesse.entity.Plantage;
 import cm.cetic.mezesse.repository.AppareilRepository;
+import cm.cetic.mezesse.repository.HistoriqueConsoleRepository;
 import cm.cetic.mezesse.repository.PlantageRepository;
 import cm.cetic.mezesse.repository.UtilisateurRepository;
 import cm.cetic.mezesse.security.UtilisateurConnecte;
@@ -14,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.HexFormat;
 import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
@@ -31,6 +34,7 @@ public class AppareilService {
   private final AppareilRepository appareils;
   private final PlantageRepository plantages;
   private final UtilisateurRepository utilisateurs;
+  private final HistoriqueConsoleRepository historique;
 
   @Transactional
   public void signal(UtilisateurConnecte moi, Signal d) {
@@ -44,6 +48,7 @@ public class AppareilService {
     a.setVersionAndroid(d.versionAndroid());
     a.setDerniereVue(Horloge.maintenant());
     appareils.save(a);
+    historique.noterActivite(LocalDate.now(EnteteOfficiel.CAMEROUN), d.installationId(), d.numeroVersion());
   }
 
   /** Un plantage revenu après avoir été marqué résolu redevient ouvert. */
@@ -69,6 +74,7 @@ public class AppareilService {
     p.setVersionAndroid(d.versionAndroid());
     p.setDerniereFois(maintenant);
     plantages.save(p);
+    historique.noterPlantage(LocalDate.now(EnteteOfficiel.CAMEROUN), d.type(), d.numeroVersion());
     plantages.marquer(empreinte, false);
     plantages.supprimerAvant(maintenant.minus(CONSERVATION));
   }

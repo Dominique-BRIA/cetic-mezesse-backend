@@ -60,6 +60,7 @@ Le site [cetic-mezesse-console](../cetic-mezesse-console) est le poste de pilota
 - **Premier compte** : variables `CONSOLE_ADMIN_EMAIL` et `CONSOLE_ADMIN_MOT_DE_PASSE`, lues au démarrage si la table est vide. Elles ne servent plus ensuite.
 - **Connexion par e-mail et mot de passe** : cinq échecs verrouillent le compte un quart d'heure.
 - **CORS** : ajouter l'adresse de la console à `CORS_ORIGINS`.
+- **Courbes** : `GET /api/console/analytique?jours=7|30|90`. Les tables `ActiviteJour` et `PlantageJour` gardent l'historique quotidien 190 jours ; il commence au déploiement de la migration V9.
 - **Routes appelées par le mobile** : `POST /api/appareils/signal` (connecté), `POST /api/appareils/plantages` et `GET /api/mises-a-jour/politique` (publiques, plantages limités par adresse).
 
 ## Déploiement sur Azure
