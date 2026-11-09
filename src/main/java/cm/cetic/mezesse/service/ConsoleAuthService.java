@@ -37,7 +37,6 @@ public class ConsoleAuthService implements ApplicationRunner {
 
   private static final int ECHECS_MAX = 5;
   private static final Duration VERROU = Duration.ofMinutes(15);
-  private static final int LONGUEUR_MINIMALE = 12;
   /** Comparé quand le compte n'existe pas : la réponse prend le même temps. */
   private static final String EMPREINTE_FICTIVE = "$2a$10$7EqJtq98hPqEX7fNZaFWoOa8e4B8m9Xw0m3yN4xQxk3yZ1m5mWb6e";
 
@@ -55,11 +54,7 @@ public class ConsoleAuthService implements ApplicationRunner {
   @Override
   @Transactional
   public void run(ApplicationArguments args) {
-    if (emailInitial.isBlank() || admins.count() > 0) return;
-    if (motDePasseInitial.length() < LONGUEUR_MINIMALE) {
-      log.warn("CONSOLE_ADMIN_MOT_DE_PASSE doit compter au moins {} caractères : compte de la console non créé.", LONGUEUR_MINIMALE);
-      return;
-    }
+    if (emailInitial.isBlank() || motDePasseInitial.isBlank() || admins.count() > 0) return;
     AdminConsole a = new AdminConsole();
     a.setEmail(emailInitial.strip().toLowerCase(java.util.Locale.ROOT));
     a.setNom("Développeur");
