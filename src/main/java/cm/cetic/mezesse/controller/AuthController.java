@@ -1,5 +1,6 @@
 package cm.cetic.mezesse.controller;
 
+import cm.cetic.mezesse.LancementDepuisCopie;
 import cm.cetic.mezesse.dto.Message;
 import cm.cetic.mezesse.dto.UtilisateurDto.ChangementMotDePasse;
 import cm.cetic.mezesse.dto.UtilisateurDto.Connexion;
@@ -12,6 +13,9 @@ import cm.cetic.mezesse.security.UtilisateurConnecte;
 import cm.cetic.mezesse.service.AuthService;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import java.io.IOException;
+import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -29,11 +33,22 @@ import org.springframework.web.bind.annotation.RestController;
 @RequiredArgsConstructor
 public class AuthController {
 
+  /** Commit déployé, écrit dans le jar par le workflow : celui-ci sait ainsi quand la nouvelle version répond. */
+  private static final String VERSION = lireVersion();
+
   private final AuthService auth;
+
+  private static String lireVersion() {
+    try (InputStream fichier = AuthController.class.getResourceAsStream("/version-deployee.txt")) {
+      return fichier == null ? "locale" : new String(fichier.readAllBytes(), StandardCharsets.UTF_8).strip();
+    } catch (IOException e) {
+      return "inconnue";
+    }
+  }
 
   @GetMapping("/sante")
   public Map<String, String> sante() {
-    return Map.of("statut", "ok");
+    return Map.of("statut", "ok", "version", VERSION, "copie", String.valueOf(LancementDepuisCopie.actif()));
   }
 
   /** Public, limité à 20 tentatives par quart d'heure (LimiteConnexionFilter). */

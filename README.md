@@ -72,6 +72,8 @@ Le déploiement est automatique. À chaque push sur `main`, le workflow « API A
 
 Azure ne compile ni n'installe rien : il remplace `app.jar` et redémarre, et Flyway applique les migrations au démarrage. L'option `clean` vide le dossier du site avant l'envoi, si bien qu'il ne reste que le jar.
 
+Azure redémarre plusieurs minutes après l'envoi. Pour tenir pendant ce temps, l'application s'exécute sur une copie du jar, locale au conteneur (`LancementDepuisCopie`). Le workflow attend que `/api/sante` annonce le commit déployé et que la route de connexion réponde avant de passer au vert.
+
 ### Une seule fois : passer l'App Service de Node à Java
 
 Dans Azure Cloud Shell (Bash), avant le premier déploiement du jar :

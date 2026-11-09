@@ -27,6 +27,8 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
+      # Le commit, lu par /api/sante : la vérification finale reconnaît ainsi la nouvelle version.
+      - run: echo "$GITHUB_SHA" > src/main/resources/version-deployee.txt
       # Compilation, tests (calcul des résultats, règles de gestion) puis le jar.
       - run: mvn -B -ntp package
       - run: ls -lh target/cetic-api.jar
@@ -56,13 +58,20 @@ jobs:
           package: cetic-api.jar
           type: jar
           clean: true
-      - name: Vérification de l'API en ligne
+      # Azure redémarre plusieurs minutes après l'envoi : on attend le bon commit, puis une vraie
+      # requête sur la connexion (formulaire vide : 400 attendu, rien n'est écrit). Cette route est
+      # limitée à 20 appels par quart d'heure, d'où un seul essai, une fois la version reconnue.
+      - name: Vérification de la nouvelle version
         env:
           API_URL: ${{ vars.API_URL }}
         run: |
-          for i in $(seq 1 30); do
-            if curl -fsS -m 60 "$API_URL/sante" | grep -q '"ok"'; then echo "API en ligne"; exit 0; fi
+          for i in $(seq 1 45); do
+            if curl -fsS -m 60 "$API_URL/sante" | grep -q "\"version\":\"$GITHUB_SHA\""; then
+              statut=$(curl -s -m 60 -o /dev/null -w '%{http_code}' -X POST "$API_URL/auth/connexion" -H 'Content-Type: application/json' -d '{}')
+              if [ "$statut" = "400" ]; then echo "Nouvelle version en ligne, connexion opérationnelle"; exit 0; fi
+              echo "Connexion : statut $statut"
+            fi
             sleep 20
           done
-          echo "::error::L'API ne répond pas sur $API_URL/sante"
+          echo "::error::La version $GITHUB_SHA ne répond pas correctement sur $API_URL"
           exit 1

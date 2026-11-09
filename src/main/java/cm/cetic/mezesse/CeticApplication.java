@@ -10,6 +10,7 @@ import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 public class CeticApplication {
 
   public static void main(String[] args) {
+    LancementDepuisCopie.relancerSiDeploye(args);
     // Les dates sont stockées en UTC (colonnes TIMESTAMP sans fuseau), comme le faisait Prisma.
     TimeZone.setDefault(TimeZone.getTimeZone("UTC"));
     SpringApplication.run(CeticApplication.class, args);
