@@ -49,7 +49,8 @@ public final class BulletinPdf {
    * @param photos photo par élève (id de l'élève)
    */
   public record Contexte(
-      Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur) {}
+      Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur,
+      Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline) {}
 
   /** « Compétences très bien acquises » → « Très bien acquises » : le titre du bloc dit déjà de quoi il s'agit. */
   static String sansPrefixe(String s) {
@@ -229,14 +230,16 @@ public final class BulletinPdf {
     float xB2 = X0 + l1 + 4;
     float xB3 = xB2 + l2 + 4;
 
-    // Discipline : laissée vide, remplie à la main.
+    // Discipline : absences de la période et sanction retenue (la plus élevée) tirées de la feuille d'appel ;
+    // retards et consignes restent à remplir à la main.
     pdf.cadre(X0, y, l1, hb);
     titreBloc(pdf, "Discipline / Conduct", X0, y, l1);
     String[] discipline = {
       "Absences non justifiées (h)", "Absences justifiées (h)", "Retards / Late", "Consignes (h) / Detention", "Avertissement / Warning",
       "Blâme / Reprimand", "Exclusion (jours / days)"
     };
-    for (int i = 0; i < discipline.length; i++) rangee(pdf, X0, l1, y + 13 + i * 10.6f, discipline[i], "", false, 42);
+    String[] valeurs = valeursDiscipline(ctx.discipline() == null ? null : ctx.discipline().get(inscriptionId));
+    for (int i = 0; i < discipline.length; i++) rangee(pdf, X0, l1, y + 13 + i * 10.6f, discipline[i], valeurs[i], false, 42);
 
     // Travail de l'élève
     pdf.cadre(xB2, y, l2, hb);
@@ -326,6 +329,21 @@ public final class BulletinPdf {
   private static void titreBloc(Pdf pdf, String s, float x, float y, float l) {
     pdf.cadre(x, y, l, 12, Couleurs.ENTETE);
     pdf.ligne(s, x, y + 3, l, Style.de(6.6f).gras().centre());
+  }
+
+  /** Valeurs du bloc « Discipline », dans l'ordre des lignes ; rien n'est inventé quand l'appel n'est pas tenu. */
+  static String[] valeursDiscipline(cm.cetic.mezesse.service.BilanAbsences.Discipline d) {
+    String[] v = {"", "", "", "", "", "", ""};
+    if (d == null) return v;
+    v[0] = cm.cetic.mezesse.service.BilanAbsences.duree(d.periode().nonJustifiees());
+    v[1] = cm.cetic.mezesse.service.BilanAbsences.duree(d.periode().justifiees());
+    switch (d.sanction()) {
+      case AVERTISSEMENT -> v[4] = "Oui / Yes";
+      case BLAME -> v[5] = "Oui / Yes";
+      case EXCLUSION -> v[6] = String.valueOf(d.joursExclusion());
+      default -> {}
+    }
+    return v;
   }
 
   private static void rangee(Pdf pdf, float x, float l, float yy, String libelle, String valeur, boolean gras, float lv) {

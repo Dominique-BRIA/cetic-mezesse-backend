@@ -48,6 +48,7 @@ public class DocumentService {
   private final CompetenceViseeRepository competences;
   private final StockageService stockage;
   private final TitreDirection titre;
+  private final BilanAbsences bilanAbsences;
 
   /** Une requête « in » ne peut pas recevoir une liste vide. */
   private static List<String> nonVide(List<String> ids) {
@@ -87,7 +88,8 @@ public class DocumentService {
           byte[] b = cle == null ? null : stockage.lire(cle);
           if (b != null) photos.put(i.getEleveId(), b);
         }
-        BulletinPdf.Contexte ctx = new BulletinPdf.Contexte(etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue());
+        BulletinPdf.Contexte ctx =
+            new BulletinPdf.Contexte(etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue(), bilanAbsences.aDesAppels(c.getId(), p) ? bilanAbsences.discipline(c.getId(), p) : Map.of());
         for (Inscription i : aImprimer) {
           pdf.nouvellePage();
           BulletinPdf.dessiner(pdf, ctx, i.getId());

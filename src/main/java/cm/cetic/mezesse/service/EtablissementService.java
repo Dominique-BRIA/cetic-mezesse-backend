@@ -2,15 +2,19 @@ package cm.cetic.mezesse.service;
 
 import cm.cetic.mezesse.dto.EtablissementDto.BaremeVue;
 import cm.cetic.mezesse.dto.EtablissementDto.Modification;
+import cm.cetic.mezesse.dto.EtablissementDto.SanctionLigne;
+import cm.cetic.mezesse.dto.EtablissementDto.SanctionVue;
 import cm.cetic.mezesse.dto.EtablissementDto.Seuil;
 import cm.cetic.mezesse.dto.EtablissementDto.Vue;
 import cm.cetic.mezesse.entity.Bareme;
 import cm.cetic.mezesse.entity.DomaineDecision;
 import cm.cetic.mezesse.entity.Etablissement;
+import cm.cetic.mezesse.entity.SanctionAbsence;
 import cm.cetic.mezesse.entity.TypeBareme;
 import cm.cetic.mezesse.exception.ApiException;
 import cm.cetic.mezesse.repository.BaremeRepository;
 import cm.cetic.mezesse.repository.EtablissementRepository;
+import cm.cetic.mezesse.repository.SanctionAbsenceRepository;
 import cm.cetic.mezesse.security.UtilisateurConnecte;
 import cm.cetic.mezesse.util.Donnees;
 import cm.cetic.mezesse.util.Nombres;
@@ -31,6 +35,7 @@ public class EtablissementService {
 
   private final EtablissementRepository etablissements;
   private final BaremeRepository baremes;
+  private final SanctionAbsenceRepository sanctionsAbsences;
   private final JournalDecisions journal;
 
   public Vue lire() {
@@ -91,6 +96,48 @@ public class EtablissementService {
         "Tableau d'honneur : moyenne minimale " + Nombres.fr(avant.doubleValue()) + " → " + Nombres.fr(seuil), "/parametres",
         Donnees.objet("avant", avant.doubleValue(), "apres", seuil));
     return Vue.de(e);
+  }
+
+  public List<SanctionVue> sanctions() {
+    return sanctionsAbsences.findAllByOrderByMinutesAsc().stream().map(s -> new SanctionVue(s.getId(), s.getLibelle(), s.getLigne(), s.getMinutes())).toList();
+  }
+
+  /** Le SG remplace toute la liste des sanctions pour absences non justifiées (comme un barème). */
+  @Transactional
+  public List<SanctionVue> remplacerSanctions(UtilisateurConnecte moi, List<SanctionLigne> lignes) {
+    List<BilanAbsences.Regle> regles = lignes.stream().map(l -> new BilanAbsences.Regle(l.libelle(), l.ligne(), (int) Math.round(l.heures() * 60))).toList();
+    if (new HashSet<>(regles.stream().map(BilanAbsences.Regle::minutes).toList()).size() != regles.size()) {
+      throw ApiException.invalide("Deux sanctions partent du même nombre d'heures.");
+    }
+    if (new HashSet<>(regles.stream().map(r -> r.libelle().toLowerCase(java.util.Locale.ROOT)).toList()).size() != regles.size()) {
+      throw ApiException.invalide("Deux sanctions ont le même nom.");
+    }
+    List<Map<String, Object>> avant = sanctions().stream().map(v -> Donnees.objet("libelle", v.libelle(), "ligne", v.ligne().name(), "minutes", v.minutes())).toList();
+    remplacerSanctions(regles);
+    List<String> resume =
+        regles.stream().sorted(Comparator.comparingInt(BilanAbsences.Regle::minutes)).map(r -> r.libelle() + " dès " + BilanAbsences.duree(r.minutes())).toList();
+    journal.consigner(
+        moi, DomaineDecision.ADMINISTRATION, "sanctions.liste",
+        "Sanctions pour absences non justifiées : " + (resume.isEmpty() ? "aucune" : String.join(", ", resume)), "/parametres",
+        Donnees.objet("avant", avant));
+    return sanctions();
+  }
+
+  /** Remplace la liste (sert aussi à rétablir l'ancienne). */
+  @Transactional
+  public void remplacerSanctions(List<BilanAbsences.Regle> regles) {
+    sanctionsAbsences.toutSupprimer();
+    sanctionsAbsences.saveAll(
+        regles.stream()
+            .map(
+                r -> {
+                  SanctionAbsence s = new SanctionAbsence();
+                  s.setLibelle(r.libelle());
+                  s.setLigne(r.ligne());
+                  s.setMinutes(r.minutes());
+                  return s;
+                })
+            .toList());
   }
 
   public List<BaremeVue> baremes() {

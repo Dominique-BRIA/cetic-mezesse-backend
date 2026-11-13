@@ -4,6 +4,7 @@ import cm.cetic.mezesse.dto.EtablissementDto.BaremeVue;
 import cm.cetic.mezesse.dto.EtablissementDto.Modification;
 import cm.cetic.mezesse.dto.EtablissementDto.Seuil;
 import cm.cetic.mezesse.dto.EtablissementDto.SeuilTableauHonneur;
+import cm.cetic.mezesse.dto.EtablissementDto.SanctionLigne;
 import cm.cetic.mezesse.dto.EtablissementDto.Vue;
 import cm.cetic.mezesse.dto.Message;
 import cm.cetic.mezesse.entity.TypeBareme;
@@ -45,6 +46,19 @@ public class EtablissementController {
   @Direction
   public Vue seuilTableauHonneur(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody SeuilTableauHonneur d) {
     return service.seuilTableauHonneur(moi, d.seuil());
+  }
+
+  /** Sanctions pour absences non justifiées : tout le monde les consulte, le SG les règle. */
+  @GetMapping("/sanctions-absences")
+  public List<cm.cetic.mezesse.dto.EtablissementDto.SanctionVue> sanctions() {
+    return service.sanctions();
+  }
+
+  @PutMapping("/sanctions-absences")
+  @SurveillantGeneral
+  public List<cm.cetic.mezesse.dto.EtablissementDto.SanctionVue> remplacerSanctions(
+      @AuthenticationPrincipal UtilisateurConnecte moi, @RequestBody List<@Valid SanctionLigne> lignes) {
+    return service.remplacerSanctions(moi, lignes);
   }
 
   @GetMapping("/baremes")

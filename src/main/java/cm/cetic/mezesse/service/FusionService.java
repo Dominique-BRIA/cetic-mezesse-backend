@@ -71,7 +71,9 @@ public class FusionService {
       new String[] {"Renvoi", "parId", "renvoi(s) prononcé(s)"},
       new String[] {"Renvoi", "reintegreParId", "réintégration(s)"},
       new String[] {"Appareil", "utilisateurId", "téléphone(s) enregistré(s)"},
-      new String[] {"Notification", "destinataireId", "notification(s)"});
+      new String[] {"Notification", "destinataireId", "notification(s)"},
+      new String[] {"Seance", "enseignantId", "séance(s) sur les feuilles d'appel"},
+      new String[] {"Seance", "remplacantId", "remplacement(s)"});
 
   private final UtilisateurRepository utilisateurs;
   private final EleveRepository eleves;
@@ -341,8 +343,19 @@ public class FusionService {
       if (!deplacees.isEmpty()) sql.update("UPDATE \"Note\" SET \"inscriptionId\" = :ig WHERE id IN (:ids)", Map.of("ig", ig, "ids", deplacees));
       reprises += deplacees.size();
       List<String> renvois = jdbc.queryForList("UPDATE \"Renvoi\" SET \"inscriptionId\" = ? WHERE \"inscriptionId\" = ? RETURNING id", String.class, ig, ia);
+      // Absences : reportées sur la fiche gardée ; si les deux fiches étaient absentes à la même séance, une seule reste.
+      List<String> absencesDeplacees = jdbc.queryForList(
+          """
+          UPDATE "Absence" a SET "inscriptionId" = ? WHERE a."inscriptionId" = ?
+            AND NOT EXISTS (SELECT 1 FROM "Absence" b WHERE b."inscriptionId" = ? AND b."seanceId" = a."seanceId") RETURNING a.id
+          """,
+          String.class, ig, ia, ig);
+      List<Map<String, Object>> absencesDoublees =
+          jdbc.queryForList("SELECT id, \"seanceId\", \"parId\", \"creeLe\"::text AS \"creeLe\" FROM \"Absence\" WHERE \"inscriptionId\" = ?", ia);
       jdbc.update("DELETE FROM \"Inscription\" WHERE id = ?", ia);
-      reunions.add(Donnees.objet("inscription", inscription, "vers", ig, "notes", deplacees, "renvois", renvois, "supprimees", supprimees, "ecrasees", ecrasees));
+      reunions.add(Donnees.objet(
+          "inscription", inscription, "vers", ig, "notes", deplacees, "renvois", renvois, "supprimees", supprimees, "ecrasees", ecrasees,
+          "absences", absencesDeplacees, "absencesDoublees", absencesDoublees));
     }
     em.clear();
 
@@ -397,6 +410,19 @@ public class FusionService {
       List<String> renvois = textes(r.get("renvois"));
       if (!renvois.isEmpty()) {
         sql.update("UPDATE \"Renvoi\" SET \"inscriptionId\" = :ia WHERE id IN (:ids) AND \"inscriptionId\" = :ig", Map.of("ia", ia, "ig", ig, "ids", renvois));
+      }
+      List<String> abs = textes(r.get("absences"));
+      if (!abs.isEmpty()) {
+        sql.update("UPDATE \"Absence\" SET \"inscriptionId\" = :ia WHERE id IN (:ids) AND \"inscriptionId\" = :ig", Map.of("ia", ia, "ig", ig, "ids", abs));
+      }
+      for (Object ab : liste(r.get("absencesDoublees"))) {
+        Map<String, Object> a = carte(ab);
+        jdbc.update(
+            """
+            INSERT INTO "Absence" (id, "seanceId", "inscriptionId", "parId", "creeLe")
+            SELECT ?, ?, ?, ?, ?::timestamp WHERE EXISTS (SELECT 1 FROM "Seance" WHERE id = ?) ON CONFLICT DO NOTHING
+            """,
+            a.get("id"), a.get("seanceId"), ia, a.get("parId"), a.get("creeLe"), a.get("seanceId"));
       }
       for (Object s : liste(r.get("supprimees"))) {
         Map<String, Object> n = carte(s);

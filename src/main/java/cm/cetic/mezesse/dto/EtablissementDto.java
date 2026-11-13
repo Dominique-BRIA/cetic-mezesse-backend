@@ -109,4 +109,17 @@ public final class EtablissementDto {
       libelleLong = Textes.optionnel(libelleLong);
     }
   }
+
+  /** Paliers de sanction en heures (décimales permises) ; vide : palier non utilisé. */
+  /** Une sanction pour absences non justifiées : nom, ligne du bulletin, à partir de combien d'heures. */
+  public record SanctionVue(String id, String libelle, cm.cetic.mezesse.service.BilanAbsences.Sanction ligne, int minutes) {}
+
+  public record SanctionLigne(
+      @jakarta.validation.constraints.NotBlank(message = "obligatoire") @jakarta.validation.constraints.Size(max = 60, message = "60 caractères au plus") String libelle,
+      @jakarta.validation.constraints.NotNull(message = "obligatoire") cm.cetic.mezesse.service.BilanAbsences.Sanction ligne,
+      @jakarta.validation.constraints.NotNull(message = "obligatoire") @jakarta.validation.constraints.Positive(message = "doit être positif") Double heures) {
+    public SanctionLigne {
+      libelle = Textes.nettoyer(libelle);
+    }
+  }
 }

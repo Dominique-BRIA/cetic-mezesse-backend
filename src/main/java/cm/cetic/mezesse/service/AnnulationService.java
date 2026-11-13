@@ -87,8 +87,14 @@ public class AnnulationService {
           Map.entry("etablissement.modifier", "Les informations de l'établissement reprendront leurs valeurs précédentes."),
           Map.entry("bareme.modifier", "L'ancien barème sera rétabli."),
           Map.entry("tableauhonneur.seuil", "Le tableau d'honneur reprendra son ancienne moyenne minimale."),
+          Map.entry("sanctions.seuils", "Les paliers de sanction reprendront leurs anciennes valeurs."),
           Map.entry("enseignant.fusionner", "Les deux comptes seront de nouveau séparés, chacun avec ses matières et ses notes."),
-          Map.entry("eleve.fusionner", "Les deux fiches seront de nouveau séparées, chacune avec son inscription et ses notes."));
+          Map.entry("eleve.fusionner", "Les deux fiches seront de nouveau séparées, chacune avec son inscription et ses notes."),
+          Map.entry("edt.version.creer", "Cette version de l'emploi du temps sera supprimée avec ses créneaux."),
+          Map.entry("edt.version.supprimer", "Cette version de l'emploi du temps sera recréée avec ses créneaux."),
+          Map.entry("edt.creneau.creer", "Le créneau sera retiré de l'emploi du temps."),
+          Map.entry("edt.creneau.modifier", "Le créneau reprendra son ancienne matière et son ancien horaire."),
+          Map.entry("edt.creneau.supprimer", "Le créneau sera remis dans l'emploi du temps."));
 
   /** Ce qui a été défait, et les fichiers à retirer du stockage une fois la transaction validée. */
   public record Resultat(String effet, List<String> fichiersASupprimer) {
@@ -116,6 +122,7 @@ public class AnnulationService {
   private final AnneeService anneeService;
   private final NotificationService notifications;
   private final FusionService fusions;
+  private final EmploiDuTempsService emploisDuTemps;
 
   // ---------- Comparaison des valeurs enregistrées dans le journal ----------
 
@@ -201,11 +208,14 @@ public class AnnulationService {
       case "eleve.reinscrire" -> reinscriptions(a);
       case "enseignant.fusionner" -> new Resultat(fusions.defaireEnseignants(a));
       case "eleve.fusionner" -> new Resultat(fusions.defaireEleves(a));
+      case "edt.version.creer", "edt.version.supprimer", "edt.creneau.creer", "edt.creneau.modifier", "edt.creneau.supprimer" ->
+          new Resultat(emploisDuTemps.defaire(action, a));
       case "annee.creer" -> anneeCreee(a);
       case "annee.activer" -> anneeActivee(a);
       case "sequence.ouvrir", "sequence.fermer" -> saisieChangee(a);
       case "etablissement.modifier" -> etablissementModifie(a);
       case "tableauhonneur.seuil" -> seuilModifie(a);
+      case "sanctions.liste" -> sanctionsModifiees(a);
       case "bareme.modifier" -> baremeModifie(a);
       default -> throw ApiException.conflit("Ce type de décision ne peut pas être annulé automatiquement.");
     };
@@ -658,6 +668,16 @@ public class AnnulationService {
     if (!egal(e.getSeuilTableauHonneur(), a.get("apres"))) return RIEN;
     e.setSeuilTableauHonneur(new BigDecimal(a.get("avant").toString()));
     return new Resultat("Le tableau d'honneur part de nouveau de " + cm.cetic.mezesse.util.Nombres.fr(e.getSeuilTableauHonneur().doubleValue()) + " de moyenne.");
+  }
+
+  @SuppressWarnings("unchecked")
+  private Resultat sanctionsModifiees(Map<String, Object> a) {
+    List<Map<String, Object>> avant = a.get("avant") == null ? List.of() : (List<Map<String, Object>>) a.get("avant");
+    etablissementService.remplacerSanctions(
+        avant.stream()
+            .map(s -> new BilanAbsences.Regle(texte(s.get("libelle")), BilanAbsences.Sanction.valueOf(texte(s.get("ligne"))), ((Number) s.get("minutes")).intValue()))
+            .toList());
+    return new Resultat("L'ancienne liste des sanctions pour absences a été rétablie.");
   }
 
   @SuppressWarnings("unchecked")

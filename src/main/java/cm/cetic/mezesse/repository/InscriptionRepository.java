@@ -28,6 +28,10 @@ public interface InscriptionRepository extends JpaRepository<Inscription, String
   @Query("select i.eleve.id, i.classe.nom from Inscription i where i.annee.id = :anneeId and i.eleve.id in :eleveIds")
   List<Object[]> classesDesEleves(String anneeId, Collection<String> eleveIds);
 
+  /** Tous les élèves d'une classe (actifs et renvoyés), dans l'ordre alphabétique : la feuille d'appel. */
+  @Query("select i from Inscription i join fetch i.eleve e where i.classe.id = :classeId order by e.nom, e.prenoms")
+  List<Inscription> deLaClasse(String classeId);
+
   /** Élèves actifs d'une classe, dans l'ordre alphabétique. */
   @Query(
       """

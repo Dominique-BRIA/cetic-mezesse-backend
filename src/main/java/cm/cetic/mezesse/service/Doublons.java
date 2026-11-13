@@ -99,6 +99,20 @@ public class Doublons {
     return " (fiche semblable : " + noms(candidats) + ")";
   }
 
+  /**
+   * Avertissement d'un autre genre (cours prévus à la même heure…) : même protocole que les doublons,
+   * avec un titre propre.
+   */
+  public static String avertir(String titre, List<Candidat> candidats) {
+    if (candidats.isEmpty()) return "";
+    if (mode() == Mode.VERIFIER) {
+      throw new ApiException(
+          HttpStatus.CONFLICT, titre + " : " + noms(candidats) + ". Confirmez pour enregistrer quand même.",
+          Donnees.objet("code", "DOUBLON", "titre", titre, "candidats", candidats));
+    }
+    return " (" + titre.toLowerCase(java.util.Locale.FRENCH) + " : " + noms(candidats) + ")";
+  }
+
   /** Même chose pour un lot ou un import : les fiches semblables sont rangées par ligne. */
   public static String controlerLot(List<Candidat> candidats) {
     if (candidats.isEmpty()) return "";
