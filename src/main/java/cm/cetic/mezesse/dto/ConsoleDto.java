@@ -61,7 +61,9 @@ public final class ConsoleDto {
       String modele,
       String versionAndroid,
       Instant premiereVue,
-      Instant derniereVue) {}
+      Instant derniereVue,
+      /** Le téléphone a envoyé son jeton : il peut recevoir les notifications push. */
+      boolean push) {}
 
   public record CompteSansAppareil(String id, String nom, String role, String telephone) {}
 

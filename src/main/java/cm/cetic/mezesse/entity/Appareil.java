@@ -38,6 +38,9 @@ public class Appareil {
   private String modele;
   private String versionAndroid;
 
+  /** Jeton Firebase Cloud Messaging : adresse des notifications push de ce téléphone. */
+  private String jetonPush;
+
   @Column(updatable = false)
   private Instant premiereVue;
 

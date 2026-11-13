@@ -94,6 +94,7 @@ public class EleveService {
   private final MatriculeService matricules;
   private final StockageService stockage;
   private final JournalDecisions journal;
+  private final Doublons doublons;
   private final AnneeCouranteService anneeCourante;
   private final ImportEleves importEleves;
   private final Validator validateur;
@@ -230,10 +231,11 @@ public class EleveService {
   @Transactional
   public Vue creer(UtilisateurConnecte moi, String anneeId, Creation d) {
     Contexte c = contexte(anneeId, d.getClasseId());
+    String semblable = Doublons.controler("un élève", doublons.eleves(null, d.getNom(), d.getPrenoms(), d.date(), anneeId));
     Eleve e = inscrire(c, d, null);
     journal.consigner(
         moi, DomaineDecision.SCOLARITE, "eleve.inscrire",
-        "Inscription de " + e.nomComplet() + " (" + e.getMatricule() + ") en " + c.classe().getNom() + (d.estRedoublant() ? ", redoublant" : ""),
+        "Inscription de " + e.nomComplet() + " (" + e.getMatricule() + ") en " + c.classe().getNom() + (d.estRedoublant() ? ", redoublant" : "") + semblable,
         "/eleves/" + e.getId(), Donnees.objet("eleveId", e.getId()));
     return Vue.de(e);
   }
@@ -290,6 +292,7 @@ public class EleveService {
           HttpStatus.BAD_REQUEST, "Rien n'a été enregistré : " + erreurs.size() + " ligne(s) à corriger.\n" + detail, Map.of("erreurs", erreurs));
     }
     String anneeId = anneeCourante.anneeDe(anneeDemandee);
+    String semblable = Doublons.controlerLot(doublons.elevesDuLot(valides, anneeId));
     // Les photos sont déposées avant la transaction ; elles sont retirées si l'inscription échoue.
     List<String> cles = new ArrayList<>();
     for (MultipartFile p : photosValides) cles.add(p == null ? null : deposerPhoto(p, "inscription"));
@@ -304,7 +307,7 @@ public class EleveService {
                     List<String> noms = liste.stream().map(Eleve::nomComplet).toList();
                     journal.consigner(
                         moi, DomaineDecision.SCOLARITE, "eleve.ajouter",
-                        "Inscription de " + liste.size() + " élève(s) en " + c.classe().getNom() + " : " + apercu(noms), "/eleves?classe=" + classeId,
+                        "Inscription de " + liste.size() + " élève(s) en " + c.classe().getNom() + " : " + apercu(noms) + semblable, "/eleves?classe=" + classeId,
                         Donnees.objet("eleveIds", liste.stream().map(Eleve::getId).toList()));
                     return liste;
                   });
@@ -413,6 +416,9 @@ public class EleveService {
   public Vue modifier(UtilisateurConnecte moi, String id, String anneeId, Modification d) {
     Eleve e = eleves.findById(id).orElseThrow(() -> ApiException.introuvable("Élève"));
     Map<String, Object> avantFiche = fiche(e);
+    boolean identiteChangee =
+        !Textes.majuscules(d.getNom().strip()).equals(e.getNom()) || !d.getPrenoms().strip().equals(e.getPrenoms()) || !d.date().equals(e.getDateNaissance());
+    String semblable = identiteChangee ? Doublons.controler("un élève", doublons.eleves(id, d.getNom(), d.getPrenoms(), d.date(), anneeId)) : "";
     remplir(e, d);
     Inscription ins = inscriptions.findByEleve_IdAndAnnee_Id(id, anneeId).orElse(null);
     String classeAvant = ins == null ? null : ins.getClasseId();
@@ -442,7 +448,7 @@ public class EleveService {
     apres.put("redoublant", ins == null ? null : ins.isRedoublant());
     journal.consigner(
         moi, DomaineDecision.SCOLARITE, "eleve.modifier",
-        "Modification de la fiche de " + e.nomComplet() + (changements.isEmpty() ? "" : " : " + String.join(", ", changements)),
+        "Modification de la fiche de " + e.nomComplet() + (changements.isEmpty() ? "" : " : " + String.join(", ", changements)) + semblable,
         "/eleves/" + id, Donnees.objet("eleveId", id, "inscriptionId", ins == null ? null : ins.getId(), "avant", avant, "apres", apres));
     return Vue.de(e);
   }
@@ -467,6 +473,7 @@ public class EleveService {
     }
     if (!erreurs.isEmpty()) throw ApiException.invalide("Import refusé, aucun élève créé.\n" + String.join("\n", erreurs.stream().limit(15).toList()));
     if (lignes.isEmpty()) throw ApiException.invalide("Aucun élève trouvé dans le fichier.");
+    String semblable = Doublons.controlerLot(doublons.elevesDuLot(lignes.stream().map(LigneLue::identite).toList(), anneeId));
     new TransactionTemplate(transactions)
         .executeWithoutResult(
             t -> {
@@ -475,7 +482,7 @@ public class EleveService {
               for (LigneLue l : lignes) ids.add(inscrire(c, l.identite(), null).getId());
               journal.consigner(
                   moi, DomaineDecision.SCOLARITE, "eleve.importer",
-                  "Import de " + lignes.size() + " élève(s) en " + c.classe().getNom() + " (fichier " + f.getOriginalFilename() + ")",
+                  "Import de " + lignes.size() + " élève(s) en " + c.classe().getNom() + " (fichier " + f.getOriginalFilename() + ")" + semblable,
                   "/eleves?classe=" + classeId, Donnees.objet("eleveIds", ids));
             });
     return new Nombre(lignes.size() + " élève(s) importé(s).", lignes.size());

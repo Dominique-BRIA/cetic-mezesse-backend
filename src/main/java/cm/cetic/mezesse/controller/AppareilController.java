@@ -1,5 +1,6 @@
 package cm.cetic.mezesse.controller;
 
+import cm.cetic.mezesse.dto.AppareilDto.Detachement;
 import cm.cetic.mezesse.dto.AppareilDto.Politique;
 import cm.cetic.mezesse.dto.AppareilDto.Rapport;
 import cm.cetic.mezesse.dto.AppareilDto.Signal;
@@ -31,6 +32,13 @@ public class AppareilController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void signal(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody Signal d) {
     service.signal(moi, d);
+  }
+
+  /** À la déconnexion, par le compte qui se déconnecte. */
+  @PostMapping("/appareils/detacher")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void detacher(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody Detachement d) {
+    service.detacher(moi, d.installationId());
   }
 
   /** Publique et limitée par adresse : l'application peut se fermer avant toute connexion. */

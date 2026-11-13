@@ -2,6 +2,7 @@ package cm.cetic.mezesse.controller;
 
 import cm.cetic.mezesse.dto.ConsoleDto.Analytique;
 import cm.cetic.mezesse.dto.ConsoleDto.Apercu;
+import cm.cetic.mezesse.dto.Message;
 import cm.cetic.mezesse.dto.ConsoleDto.Connexion;
 import cm.cetic.mezesse.dto.ConsoleDto.DetailPlantage;
 import cm.cetic.mezesse.dto.ConsoleDto.GroupePlantage;
@@ -64,6 +65,11 @@ public class ConsoleController {
   @GetMapping("/appareils")
   public Parc appareils() {
     return service.parc();
+  }
+
+  @PostMapping("/appareils/{installationId}/push-essai")
+  public Message essaiPush(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String installationId) {
+    return new Message(service.essaiPush(moi, installationId));
   }
 
   @GetMapping("/plantages")

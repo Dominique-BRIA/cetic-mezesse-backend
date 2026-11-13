@@ -48,6 +48,7 @@ public class ClasseService {
   private final InscriptionRepository inscriptions;
   private final NommageClassesService nommage;
   private final JournalDecisions journal;
+  private final Doublons doublons;
 
   /** Un professeur ne voit que les classes où il enseigne. */
   public List<Vue> liste(UtilisateurConnecte moi, String anneeId) {
@@ -94,6 +95,7 @@ public class ClasseService {
   @Transactional
   public Vue creer(UtilisateurConnecte moi, String anneeId, Requete d) {
     AnneeScolaire annee = annees.findById(anneeId).orElseThrow(() -> ApiException.introuvable("Année scolaire"));
+    String semblable = Doublons.controler("une classe", doublons.classes(anneeId, d.niveau(), d.specialiteId()));
     Classe c = new Classe();
     c.setAnnee(annee);
     c.setNiveau(d.niveau());
@@ -104,7 +106,7 @@ public class ClasseService {
     classes.saveAndFlush(c);
     List<Renommage> renommees = nommage.renommerGroupe(anneeId, d.niveau(), d.specialiteId());
     journal.consigner(
-        moi, DomaineDecision.ORGANISATION, "classe.creer", "Création de la classe " + c.getNom() + NomsClasses.decrire(renommees),
+        moi, DomaineDecision.ORGANISATION, "classe.creer", "Création de la classe " + c.getNom() + NomsClasses.decrire(renommees) + semblable,
         lien(c.getId()), Donnees.objet("classeId", c.getId()));
     return vue(c);
   }

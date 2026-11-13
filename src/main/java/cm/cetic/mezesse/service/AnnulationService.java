@@ -86,7 +86,9 @@ public class AnnulationService {
           Map.entry("sequence.fermer", "La saisie des notes sera rouverte."),
           Map.entry("etablissement.modifier", "Les informations de l'établissement reprendront leurs valeurs précédentes."),
           Map.entry("bareme.modifier", "L'ancien barème sera rétabli."),
-          Map.entry("tableauhonneur.seuil", "Le tableau d'honneur reprendra son ancienne moyenne minimale."));
+          Map.entry("tableauhonneur.seuil", "Le tableau d'honneur reprendra son ancienne moyenne minimale."),
+          Map.entry("enseignant.fusionner", "Les deux comptes seront de nouveau séparés, chacun avec ses matières et ses notes."),
+          Map.entry("eleve.fusionner", "Les deux fiches seront de nouveau séparées, chacune avec son inscription et ses notes."));
 
   /** Ce qui a été défait, et les fichiers à retirer du stockage une fois la transaction validée. */
   public record Resultat(String effet, List<String> fichiersASupprimer) {
@@ -113,6 +115,7 @@ public class AnnulationService {
   private final EtablissementService etablissementService;
   private final AnneeService anneeService;
   private final NotificationService notifications;
+  private final FusionService fusions;
 
   // ---------- Comparaison des valeurs enregistrées dans le journal ----------
 
@@ -196,6 +199,8 @@ public class AnnulationService {
       case "eleve.photos" -> photosChangees(a);
       case "eleve.importer", "eleve.ajouter" -> elevesAjoutes(a);
       case "eleve.reinscrire" -> reinscriptions(a);
+      case "enseignant.fusionner" -> new Resultat(fusions.defaireEnseignants(a));
+      case "eleve.fusionner" -> new Resultat(fusions.defaireEleves(a));
       case "annee.creer" -> anneeCreee(a);
       case "annee.activer" -> anneeActivee(a);
       case "sequence.ouvrir", "sequence.fermer" -> saisieChangee(a);

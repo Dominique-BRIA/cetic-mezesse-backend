@@ -40,6 +40,7 @@ public class MatiereService {
   private final UtilisateurRepository utilisateurs;
   private final NoteRepository notes;
   private final JournalDecisions journal;
+  private final Doublons doublons;
 
   /** Champs qu'une désapprobation remet en l'état (AnnulationService). */
   static Map<String, Object> champs(Matiere m) {
@@ -71,13 +72,14 @@ public class MatiereService {
     verifierGroupe(d.groupeId(), d.classeId());
     Utilisateur prof = professeur(d.professeurId());
     if (classes.countByIdAndAnnee_Id(d.classeId(), anneeId) == 0) throw ApiException.interdit();
+    String semblable = Doublons.controler("une matière", doublons.matieres(d.classeId(), d.nom(), null));
     Matiere m = new Matiere();
     appliquer(m, d, prof);
     matieres.saveAndFlush(m);
     journal.consigner(
         moi, DomaineDecision.ORGANISATION, "matiere.creer",
         "Création de la matière " + m.getNom() + " en " + m.getClasse().getNom() + " (coefficient " + m.getCoefficient()
-            + (prof != null ? ", " + prof.nomComplet() : "") + ")",
+            + (prof != null ? ", " + prof.nomComplet() : "") + ")" + semblable,
         "/matieres?classe=" + m.getClasseId(), Donnees.objet("id", m.getId()));
     return vue(m, 0);
   }
@@ -91,6 +93,8 @@ public class MatiereService {
     }
     verifierGroupe(d.groupeId(), d.classeId());
     Utilisateur prof = professeur(d.professeurId());
+    boolean renommee = !d.nom().equals(m.getNom()) || !d.classeId().equals(m.getClasseId());
+    String semblable = renommee ? Doublons.controler("une matière", doublons.matieres(d.classeId(), d.nom(), id)) : "";
     Map<String, Object> avant = champs(m);
     String nomAvant = m.getNom();
     String classeAvant = m.getClasse().getNom();
@@ -107,7 +111,7 @@ public class MatiereService {
     }
     journal.consigner(
         moi, DomaineDecision.ORGANISATION, "matiere.modifier",
-        "Modification de la matière " + nomAvant + " en " + classeAvant + (changements.isEmpty() ? "" : " : " + String.join(", ", changements)),
+        "Modification de la matière " + nomAvant + " en " + classeAvant + (changements.isEmpty() ? "" : " : " + String.join(", ", changements)) + semblable,
         "/matieres?classe=" + m.getClasseId(), Donnees.objet("id", id, "avant", avant, "apres", champs(m)));
     return vue(m, nbNotes);
   }

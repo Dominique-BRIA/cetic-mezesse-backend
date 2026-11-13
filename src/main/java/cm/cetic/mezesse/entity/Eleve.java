@@ -47,6 +47,9 @@ public class Eleve {
   private String parentTelephone;
   private String parentAdresse;
 
+  /** Fiche absorbée par une fusion de doublons : sans inscription, gardée pour que la fusion puisse être défaite. */
+  private String fusionneDansId;
+
   @Column(updatable = false)
   private Instant creeLe;
 

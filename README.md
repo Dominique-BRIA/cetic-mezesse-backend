@@ -63,6 +63,15 @@ Le site [cetic-mezesse-console](../cetic-mezesse-console) est le poste de pilota
 - **Courbes** : `GET /api/console/analytique?jours=7|30|90`. Les tables `ActiviteJour` et `PlantageJour` gardent l'historique quotidien 190 jours ; il commence au déploiement de la migration V9.
 - **Routes appelées par le mobile** : `POST /api/appareils/signal` (connecté), `POST /api/appareils/plantages` et `GET /api/mises-a-jour/politique` (publiques, plantages limités par adresse).
 
+## Doublons, envois répétés et fusions
+
+Les doublons sont signalés, jamais refusés :
+
+- **`X-Doublons: verifier`** sur une création (enseignant, élève, lot, import, matière, classe) : s'il existe une fiche semblable (accents, majuscules, ordre des mots et une faute de frappe ignorés), l'API répond `409` avec `code: DOUBLON`, un titre et les fiches en question. Le client renvoie avec **`X-Doublons: confirme`** si l'utilisateur maintient sa saisie. Sans en-tête (anciennes versions de l'application), rien ne change ; le journal du SG note la fiche semblable dans tous les cas. Même mécanisme (`code: REPETITION`) pour un mot de passe réinitialisé deux fois en 10 minutes.
+- **`X-Envoi: <identifiant du formulaire>`** : un second envoi du même formulaire (double clic, réseau lent) n'est pas exécuté et reçoit la réponse du premier (`EnvoiUniqueFilter`).
+- **`/api/verifications`** : page « À vérifier » de la direction (doublons probables, matières sans enseignant ou confiées à un compte désactivé, classes sans professeur principal, dates de naissance au 1er janvier, élèves sans parent). Un point se marque « c'est normal » (`POST /api/verifications/ignorees`).
+- **`/api/fusions/enseignants`** (SG) et **`/api/fusions/eleves`** (direction) : `GET` donne l'aperçu, `POST` fusionne. La fiche absorbée n'est pas effacée (`fusionneDansId`) ; le Proviseur défait la fusion en désapprouvant la décision.
+
 ## Déploiement sur Azure
 
 Le déploiement est automatique. À chaque push sur `main`, le workflow « API Azure » (`.github/workflows/deploiement.yml`) :

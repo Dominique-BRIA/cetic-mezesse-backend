@@ -1,6 +1,7 @@
 package cm.cetic.mezesse.config;
 
 import cm.cetic.mezesse.entity.Role;
+import cm.cetic.mezesse.security.EnvoiUniqueFilter;
 import cm.cetic.mezesse.security.ConvertisseurJeton;
 import cm.cetic.mezesse.security.JetonService;
 import cm.cetic.mezesse.security.LecteurJeton;
@@ -106,6 +107,8 @@ public class SecurityConfig {
                     .httpStrictTransportSecurity(s -> s.includeSubDomains(true).maxAgeInSeconds(31_536_000)))
         .addFilterBefore(new LimiteConnexionFilter(reponses), BearerTokenAuthenticationFilter.class)
         .addFilterAfter(new RenouvellementJetonFilter(jetons), BearerTokenAuthenticationFilter.class)
+        // Un formulaire envoyé deux fois (double clic, réseau lent) n'est exécuté qu'une fois.
+        .addFilterAfter(new EnvoiUniqueFilter(), RenouvellementJetonFilter.class)
         .build();
   }
 

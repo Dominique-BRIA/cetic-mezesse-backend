@@ -67,6 +67,9 @@ public class Utilisateur {
   /** Acte de nomination ou d'affectation : « Décision n° 0123/MINESEC/… du 12/09/2020 ». */
   private String acteNomination;
 
+  /** Compte absorbé par une fusion de doublons : désactivé, gardé pour que la fusion puisse être défaite. */
+  private String fusionneDansId;
+
   @Column(updatable = false)
   private Instant creeLe;
 

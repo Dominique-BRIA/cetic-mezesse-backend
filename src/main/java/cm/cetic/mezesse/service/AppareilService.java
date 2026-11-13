@@ -47,8 +47,17 @@ public class AppareilService {
     a.setModele(d.modele());
     a.setVersionAndroid(d.versionAndroid());
     a.setDerniereVue(Horloge.maintenant());
+    if (d.jetonPush() != null) a.setJetonPush(d.jetonPush().isBlank() ? null : d.jetonPush().strip());
     appareils.save(a);
     historique.noterActivite(LocalDate.now(EnteteOfficiel.CAMEROUN), d.installationId(), d.numeroVersion());
+  }
+
+  /** À la déconnexion : le téléphone garde son jeton mais n'appartient plus au compte, qui n'y reçoit plus rien. */
+  @Transactional
+  public void detacher(UtilisateurConnecte moi, String installationId) {
+    appareils.findByInstallationId(installationId)
+        .filter(a -> a.getUtilisateur() != null && a.getUtilisateur().getId().equals(moi.id()))
+        .ifPresent(a -> a.setUtilisateur(null));
   }
 
   /** Un plantage revenu après avoir été marqué résolu redevient ouvert. */

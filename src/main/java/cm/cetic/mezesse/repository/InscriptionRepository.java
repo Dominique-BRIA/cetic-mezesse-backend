@@ -14,6 +14,20 @@ public interface InscriptionRepository extends JpaRepository<Inscription, String
 
   Optional<Inscription> findByEleve_IdAndAnnee_Id(String eleveId, String anneeId);
 
+  List<Inscription> findByEleve_IdOrderByCreeLe(String eleveId);
+
+  @Query(
+      """
+      select i from Inscription i join fetch i.eleve e join fetch i.classe c
+      where i.annee.id = :anneeId and i.statut = :statut
+      order by c.niveau, c.nom, e.nom, e.prenoms
+      """)
+  List<Inscription> deLAnnee(String anneeId, StatutInscription statut);
+
+  /** [eleveId, nom de la classe] des élèves inscrits dans l'année. */
+  @Query("select i.eleve.id, i.classe.nom from Inscription i where i.annee.id = :anneeId and i.eleve.id in :eleveIds")
+  List<Object[]> classesDesEleves(String anneeId, Collection<String> eleveIds);
+
   /** Élèves actifs d'une classe, dans l'ordre alphabétique. */
   @Query(
       """

@@ -11,4 +11,6 @@ public interface DecisionRepository extends JpaRepository<Decision, String>, Jpa
   long countByStatutAndCreeLeGreaterThanEqual(StatutDecision statut, Instant depuis);
 
   long countByStatut(StatutDecision statut);
+
+  java.util.List<Decision> findByActionAndCreeLeAfterOrderByCreeLeDesc(String action, Instant depuis);
 }

@@ -59,6 +59,7 @@ public class ConsoleService {
   private final JournalConsoleRepository journalLignes;
   private final JournalConsoleService journal;
   private final PolitiqueMiseAJourService politique;
+  private final PushService push;
 
   public Apercu apercu() {
     Instant maintenant = Horloge.maintenant();
@@ -174,7 +175,20 @@ public class ConsoleService {
     Utilisateur u = a.getUtilisateur();
     return new LigneAppareil(
         a.getInstallationId(), u == null ? null : u.nomComplet(), u == null ? null : u.getRole().name(), a.getNumeroVersion(), a.getNomVersion(), a.getCorrectif(),
-        a.getModele(), a.getVersionAndroid(), a.getPremiereVue(), a.getDerniereVue());
+        a.getModele(), a.getVersionAndroid(), a.getPremiereVue(), a.getDerniereVue(), a.getJetonPush() != null);
+  }
+
+  /** Notification d'essai à un seul téléphone : vérifie toute la chaîne (Firebase, jeton, affichage). */
+  @Transactional
+  public String essaiPush(UtilisateurConnecte moi, String installationId) {
+    Appareil a = appareils.findByInstallationId(installationId).orElseThrow(() -> ApiException.introuvable("Téléphone"));
+    if (a.getJetonPush() == null) {
+      throw ApiException.conflit("Ce téléphone n'a pas encore envoyé de jeton : il faut la version 1.1.6 ou plus, ouverte avec un compte connecté.");
+    }
+    String heure = java.time.LocalTime.now(cm.cetic.mezesse.document.EnteteOfficiel.CAMEROUN).withNano(0).toString();
+    String resultat = push.essai(a.getId(), a.getJetonPush(), "Notification d'essai", "Envoyée depuis la console technique à " + heure + ". Les notifications fonctionnent sur ce téléphone.");
+    journal.noter(moi.nom(), "push.essai", installationId, resultat);
+    return resultat;
   }
 
   /** Comptes actifs dont aucun téléphone ne s'est signalé : site seul, ou application trop ancienne pour le faire. */

@@ -18,7 +18,12 @@ public final class AppareilDto {
       @NotBlank(message = "obligatoire") @Size(max = 32, message = "32 caractères au plus") String nomVersion,
       Integer correctif,
       @Size(max = 80, message = "80 caractères au plus") String modele,
-      @Size(max = 16, message = "16 caractères au plus") String versionAndroid) {}
+      @Size(max = 16, message = "16 caractères au plus") String versionAndroid,
+      /** Absent (anciennes versions) : inchangé ; vide : notifications push coupées sur ce téléphone. */
+      @Size(max = 4096, message = "4096 caractères au plus") String jetonPush) {}
+
+  /** Déconnexion : le téléphone ne reçoit plus les notifications du compte. */
+  public record Detachement(@NotBlank(message = "obligatoire") @Size(max = 64, message = "64 caractères au plus") String installationId) {}
 
   /** Plantage : route publique, l'application peut se fermer avant toute connexion. Les textes trop longs sont coupés. */
   public record Rapport(

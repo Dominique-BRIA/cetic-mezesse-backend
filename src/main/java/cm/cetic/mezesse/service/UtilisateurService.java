@@ -40,6 +40,7 @@ public class UtilisateurService {
   private final CeticProperties proprietes;
   private final AuthService auth;
   private final JournalDecisions journal;
+  private final Doublons doublons;
 
   /** Champs qu'une désapprobation remet en l'état (AnnulationService). */
   static Map<String, Object> champs(Utilisateur u) {
@@ -69,7 +70,8 @@ public class UtilisateurService {
                     parProf.getOrDefault(u.getId(), List.of()).stream()
                         .map(m -> new MatiereEnseignee(m.getId(), m.getNom(), m.getCoefficient(), new Reference(m.getClasse().getId(), m.getClasse().getNom())))
                         .toList(),
-                    principales.getOrDefault(u.getId(), List.of()).stream().map(c -> new Reference(c.getId(), c.getNom())).toList()))
+                    principales.getOrDefault(u.getId(), List.of()).stream().map(c -> new Reference(c.getId(), c.getNom())).toList(),
+                    u.getFusionneDansId()))
         .toList();
   }
 
@@ -82,6 +84,7 @@ public class UtilisateurService {
     verifierContact(d);
     auth.verifierDisponibles("", d.telephone(), d.email());
     if (d.carriere() != null) verifierMatricule("", d.carriere().matricule());
+    String semblable = Doublons.controler("un compte", doublons.enseignants(null, d.nom(), d.prenom()));
     Utilisateur u = new Utilisateur();
     appliquer(u, d);
     u.setRole(Role.PROFESSEUR);
@@ -90,7 +93,7 @@ public class UtilisateurService {
     utilisateurs.saveAndFlush(u);
     journal.consigner(
         moi, DomaineDecision.ORGANISATION, "enseignant.creer",
-        "Création du compte de l'enseignant " + u.nomComplet() + (u.getDiscipline() != null ? " (" + u.getDiscipline() + ")" : ""),
+        "Création du compte de l'enseignant " + u.nomComplet() + (u.getDiscipline() != null ? " (" + u.getDiscipline() + ")" : "") + semblable,
         "/enseignants", Donnees.objet("id", u.getId()));
     return Profil.de(u);
   }
@@ -103,6 +106,8 @@ public class UtilisateurService {
     if (id.equals(moi.id()) && !d.actif()) throw ApiException.invalide("Vous ne pouvez pas désactiver votre propre compte.");
     auth.verifierDisponibles(id, d.telephone(), d.email());
     if (d.carriere() != null) verifierMatricule(id, d.carriere().matricule());
+    boolean renomme = !d.nom().equals(u.getNom()) || !d.prenom().equals(u.getPrenom());
+    String semblable = renomme ? Doublons.controler("un compte", doublons.enseignants(id, d.nom(), d.prenom())) : "";
     Map<String, Object> avant = champs(u);
     boolean etaitActif = u.isActif();
     appliquer(u, d);
@@ -114,7 +119,7 @@ public class UtilisateurService {
       default -> "enseignant.modifier";
     };
     journal.consigner(
-        moi, DomaineDecision.ORGANISATION, action, quoi + " du compte de " + u.nomComplet(), "/enseignants",
+        moi, DomaineDecision.ORGANISATION, action, quoi + " du compte de " + u.nomComplet() + semblable, "/enseignants",
         Donnees.objet("id", id, "avant", avant, "apres", champs(u)));
     return Profil.de(u);
   }
@@ -123,6 +128,7 @@ public class UtilisateurService {
   public String reinitialiser(UtilisateurConnecte moi, String id) {
     Utilisateur u = utilisateurs.findById(id).orElseThrow(() -> ApiException.introuvable("Compte"));
     if (u.getRole() == Role.PROVISEUR) throw ApiException.interdit("Le mot de passe du chef d'établissement ne se réinitialise pas ici.");
+    doublons.repetition("enseignant.reinitialiser", id, "réinitialisé le mot de passe de " + u.nomComplet());
     String avantHash = u.getMotDePasse();
     boolean avantDoitChanger = u.isDoitChangerMotDePasse();
     u.setMotDePasse(motsDePasse.encode(proprietes.motDePasseReinitialise()));

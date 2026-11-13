@@ -20,6 +20,7 @@ public class NotificationService {
 
   private final NotificationRepository notifications;
   private final UtilisateurRepository utilisateurs;
+  private final PushService push;
 
   @Transactional
   public void notifier(Collection<String> destinataireIds, String titre, String message, String lien) {
@@ -37,6 +38,8 @@ public class NotificationService {
                     })
                 .toList();
     notifications.saveAll(nouvelles);
+    // Aussi sur les téléphones, application fermée : après validation, en arrière-plan.
+    push.envoyerApresValidation(new LinkedHashSet<>(destinataireIds), titre, Textes.couper(message, 1000), lien);
   }
 
   /** Séquence ouverte à la saisie : chaque professeur actif qui a une matière cette année-là est prévenu. */

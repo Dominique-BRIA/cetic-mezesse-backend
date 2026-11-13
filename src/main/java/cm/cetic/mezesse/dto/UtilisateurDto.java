@@ -151,7 +151,9 @@ public final class UtilisateurDto {
       String acteNomination,
       Instant creeLe,
       List<MatiereEnseignee> matieres,
-      List<Reference> classesPrincipales) {}
+      List<Reference> classesPrincipales,
+      /** Compte absorbé par une fusion : l'id du compte gardé. */
+      String fusionneDansId) {}
 
   /**
    * Carrière d'un personnel, imprimée sur l'attestation de présence effective au poste. Absente d'une
