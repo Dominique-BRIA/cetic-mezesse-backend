@@ -27,11 +27,29 @@ import org.springframework.web.bind.annotation.RestController;
 public class EmploiDuTempsController {
 
   private final EmploiDuTempsService service;
+  private final cm.cetic.mezesse.service.EtablissementService etablissement;
+  private final cm.cetic.mezesse.repository.ClasseRepository classes;
 
   @GetMapping
   @Direction
   public Vue vue(@RequestParam String classeId, @RequestParam(required = false) String versionId) {
     return service.vue(classeId, versionId);
+  }
+
+  /** L'emploi du temps affiché, en tableau : « format » = xlsx (classeur) ou pdf (à imprimer ou afficher). */
+  @GetMapping("/export")
+  @Direction
+  public org.springframework.http.ResponseEntity<byte[]> exporter(
+      @RequestParam String classeId, @RequestParam(required = false) String versionId, @RequestParam(defaultValue = "xlsx") String format) {
+    Vue v = service.vue(classeId, versionId);
+    String classe = classes.findById(classeId).map(c -> c.getNom()).orElse("");
+    String titre = "Emploi du temps · " + classe;
+    String nom = "emploi-du-temps-" + java.text.Normalizer.normalize(classe, java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").replaceAll("[^A-Za-z0-9]+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT);
+    var etab = etablissement.requis();
+    return AbsenceController.fichier(nom, format,
+        () -> cm.cetic.mezesse.document.EmploiDuTempsExport.pdf(etab, titre, v),
+        () -> cm.cetic.mezesse.document.EmploiDuTempsExport.excel(titre, v));
   }
 
   @PostMapping("/versions")

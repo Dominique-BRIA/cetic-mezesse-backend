@@ -130,6 +130,50 @@ public class AbsenceController {
     return service.enseignantsAbsents(annee.anneeDe(anneeId), du, au, vide(enseignantId));
   }
 
+  /** Export des séances non assurées (mêmes filtres que la page) : « format » = xlsx ou pdf. */
+  @GetMapping("/absences/enseignants/export")
+  @Direction
+  public ResponseEntity<byte[]> exporterEnseignants(
+      @RequestParam(required = false) String anneeId,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate du,
+      @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate au,
+      @RequestParam(required = false) String enseignantId,
+      @RequestParam(defaultValue = "xlsx") String format) {
+    var tout = service.enseignantsAbsents(annee.anneeDe(anneeId), du, au, vide(enseignantId));
+    // Avec un enseignant choisi : ses seules séances et son seul total (le service renvoie les totaux de tous).
+    var d = vide(enseignantId) == null
+        ? tout
+        : new cm.cetic.mezesse.dto.AbsencesDto.EnseignantsAbsents(
+            tout.totaux().stream().filter(x -> enseignantId.equals(x.id())).toList(), tout.seances());
+    String titre = "Enseignants absents";
+    if (vide(enseignantId) != null) {
+      titre += d.totaux().stream().filter(t -> enseignantId.equals(t.id())).findFirst().map(t -> " : " + t.prenom() + " " + t.nom()).orElse("");
+    }
+    if (du != null || au != null) {
+      titre += " du " + (du == null ? "début" : cm.cetic.mezesse.document.EnteteOfficiel.dateFr(du)) + " au "
+          + (au == null ? "ce jour" : cm.cetic.mezesse.document.EnteteOfficiel.dateFr(au));
+    }
+    String t = titre;
+    var etab = etablissement.requis();
+    return fichier("enseignants-absents-" + LocalDate.now(), format,
+        () -> cm.cetic.mezesse.document.EnseignantsAbsentsExport.pdf(etab, t, d),
+        () -> cm.cetic.mezesse.document.EnseignantsAbsentsExport.excel(t, d));
+  }
+
+  /** Réponse de téléchargement : PDF affiché dans le navigateur, classeur Excel enregistré. */
+  static ResponseEntity<byte[]> fichier(String nom, String format, java.util.function.Supplier<byte[]> pdf, java.util.function.Supplier<byte[]> excel) {
+    if ("pdf".equals(format)) {
+      return ResponseEntity.ok()
+          .contentType(MediaType.APPLICATION_PDF)
+          .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + nom + ".pdf\"")
+          .body(pdf.get());
+    }
+    return ResponseEntity.ok()
+        .contentType(MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"))
+        .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + nom + ".xlsx\"")
+        .body(excel.get());
+  }
+
   @GetMapping("/absences/{id}")
   @Direction
   public Detail detail(@RequestParam(required = false) String anneeId, @PathVariable String id) {
