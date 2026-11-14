@@ -52,6 +52,27 @@ public class EmploiDuTempsController {
     return service.ajouterCreneau(moi, d);
   }
 
+  /** Ajoute une ligne horaire vide (on remplit ensuite chaque case avec une matière). */
+  @PostMapping("/plages")
+  @SurveillantGeneral
+  public Vue ajouterPlage(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody cm.cetic.mezesse.dto.EmploiDuTempsDto.PlageRequete d) {
+    return service.ajouterPlage(moi, d);
+  }
+
+  /** Retire une ligne horaire sans cours. */
+  @DeleteMapping("/plages/{id}")
+  @SurveillantGeneral
+  public Vue supprimerPlage(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id) {
+    return service.supprimerPlage(moi, id);
+  }
+
+  /** Change l'horaire de toute une ligne (tous les jours) : 07:30 – 08:25 devient 07:45 – 08:40, par exemple. */
+  @PutMapping("/horaires")
+  @SurveillantGeneral
+  public Vue modifierHoraire(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody cm.cetic.mezesse.dto.EmploiDuTempsDto.HoraireRequete d) {
+    return service.modifierHoraire(moi, d);
+  }
+
   @PutMapping("/creneaux/{id}")
   @SurveillantGeneral
   public Vue modifierCreneau(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id, @Valid @RequestBody CreneauRequete d) {

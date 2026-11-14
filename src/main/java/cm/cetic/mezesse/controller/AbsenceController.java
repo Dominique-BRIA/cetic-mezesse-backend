@@ -53,6 +53,8 @@ public class AbsenceController {
   private final AbsenceService service;
   private final cm.cetic.mezesse.service.EtablissementService etablissement;
   private final cm.cetic.mezesse.service.BilanAbsences bilan;
+  private final cm.cetic.mezesse.service.ExclusionService exclusions;
+  private final cm.cetic.mezesse.repository.ClasseRepository classes;
   private final AnneeCouranteService annee;
   private final ObjectMapper json;
   private final Validator validateur;
@@ -146,6 +148,32 @@ public class AbsenceController {
   @SurveillantGeneral
   public JustificationVue modifier(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id, MultipartHttpServletRequest req) {
     return service.modifier(moi, id, lire(req, ModifierJustification.class), pieces(req));
+  }
+
+  /**
+   * Sanction de l'année de chaque élève (une classe, ou toutes) : la colonne « Sanction » de la liste des élèves,
+   * d'où le Directeur décide aussi des exclusions.
+   */
+  @GetMapping("/absences/sanctions")
+  @Direction
+  public java.util.List<cm.cetic.mezesse.dto.AbsencesDto.BilanEleve> sanctions(
+      @RequestParam(required = false) String anneeId, @RequestParam(required = false) String classeId) {
+    java.util.List<String> ids =
+        classeId != null && !classeId.isBlank() ? java.util.List.of(classeId) : classes.findByAnnee_IdOrderByNiveauAscNomAsc(annee.anneeDe(anneeId)).stream().map(cm.cetic.mezesse.entity.Classe::getId).toList();
+    return ids.stream().flatMap(id -> bilan.bilan(id, cm.cetic.mezesse.service.calcul.Periode.A).eleves().stream()).toList();
+  }
+
+  /** Décision du Directeur pour un élève qui a atteint les heures d'exclusion. */
+  @PostMapping("/absences/exclusions")
+  @cm.cetic.mezesse.security.Proviseur
+  public Resultat deciderExclusion(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody cm.cetic.mezesse.dto.AbsencesDto.DeciderExclusion d) {
+    return exclusions.decider(moi, d);
+  }
+
+  @DeleteMapping("/absences/exclusions/{id}")
+  @cm.cetic.mezesse.security.Proviseur
+  public Resultat annulerExclusion(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id) {
+    return exclusions.annuler(moi, id);
   }
 
   @DeleteMapping("/justifications/{id}")

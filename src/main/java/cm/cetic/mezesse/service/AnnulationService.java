@@ -208,7 +208,7 @@ public class AnnulationService {
       case "eleve.reinscrire" -> reinscriptions(a);
       case "enseignant.fusionner" -> new Resultat(fusions.defaireEnseignants(a));
       case "eleve.fusionner" -> new Resultat(fusions.defaireEleves(a));
-      case "edt.version.creer", "edt.version.supprimer", "edt.creneau.creer", "edt.creneau.modifier", "edt.creneau.supprimer" ->
+      case "edt.version.creer", "edt.version.supprimer", "edt.creneau.creer", "edt.creneau.modifier", "edt.creneau.supprimer", "edt.horaire.modifier", "edt.plage.ajouter", "edt.plage.supprimer" ->
           new Resultat(emploisDuTemps.defaire(action, a));
       case "annee.creer" -> anneeCreee(a);
       case "annee.activer" -> anneeActivee(a);

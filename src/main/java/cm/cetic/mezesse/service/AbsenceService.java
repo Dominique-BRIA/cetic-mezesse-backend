@@ -74,6 +74,7 @@ public class AbsenceService {
   private final StockageService stockage;
   private final PlatformTransactionManager transactions;
   private final BilanAbsences bilan;
+  private final NumerosEleves numerosEleves;
 
   // ---------- Consultation ----------
 
@@ -200,6 +201,7 @@ public class AbsenceService {
     for (Justification j : justifications.desAbsences(rangs.stream().map(r -> (String) r.get("id")).toList())) {
       parAbsence.put(j.getAbsence().getId(), vue(j));
     }
+    Map<String, Integer> numeros = numerosEleves.deClasses(rangs.stream().map(r -> (String) r.get("classe_id")).distinct().toList());
     List<Ligne> l = new ArrayList<>();
     for (Map<String, Object> r : rangs) {
       Object d = r.get("date");
@@ -208,7 +210,7 @@ public class AbsenceService {
           (String) r.get("id"), (String) r.get("inscription"), (String) r.get("eleve"), (String) r.get("nom"), (String) r.get("prenoms"),
           (String) r.get("matricule"), (String) r.get("classe_id"), (String) r.get("classe"), date, (String) r.get("seance"), (String) r.get("matiere"),
           (String) r.get("debut"), (String) r.get("fin"), ((Number) r.get("duree")).intValue(), Boolean.TRUE.equals(r.get("ens_absent")),
-          parAbsence.get((String) r.get("id"))));
+          parAbsence.get((String) r.get("id")), numeros.getOrDefault((String) r.get("inscription"), 0)));
     }
     return l;
   }

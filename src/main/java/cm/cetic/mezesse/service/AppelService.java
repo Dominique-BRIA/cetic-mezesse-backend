@@ -83,6 +83,7 @@ public class AppelService {
   private final ClasseRepository classes;
   private final InscriptionRepository inscriptions;
   private final RenvoiRepository renvois;
+  private final NumerosEleves numerosEleves;
   private final SequenceRepository sequences;
   private final EmploiDuTempsRepository versions;
   private final CreneauRepository creneaux;
@@ -129,11 +130,12 @@ public class AppelService {
         eleves.isEmpty()
             ? Map.of()
             : renvois.desInscriptions(eleves.stream().map(Inscription::getId).toList()).stream().collect(Collectors.groupingBy(r -> r.getInscription().getId()));
+    Map<String, Integer> numeros = numerosEleves.deClasses(List.of(classe.getId()));
     List<EleveVue> ev =
         eleves.stream()
             .map(i -> new EleveVue(
                 i.getId(), i.getEleve().getId(), i.getEleve().getNom(), i.getEleve().getPrenoms(), i.getEleve().getMatricule(),
-                renvoyeLe(parInscription.getOrDefault(i.getId(), List.of()), date)))
+                renvoyeLe(parInscription.getOrDefault(i.getId(), List.of()), date), numeros.getOrDefault(i.getId(), 0)))
             .toList();
     boolean edt = !versions.deLaClasse(classe.getId()).isEmpty();
     int jour = date.getDayOfWeek().getValue();
@@ -151,7 +153,7 @@ public class AppelService {
 
   /** Créneaux de l'emploi du temps en vigueur ce jour-là, dans l'ordre de la journée. */
   private List<Creneau> prevues(Classe classe, LocalDate date) {
-    if (date.getDayOfWeek() == DayOfWeek.SUNDAY) return List.of();
+    if (weekEnd(date)) return List.of();
     EmploiDuTemps e = EmploiDuTempsService.enVigueur(versions.deLaClasse(classe.getId()), date);
     if (e == null) return List.of();
     int jour = date.getDayOfWeek().getValue();
@@ -212,7 +214,7 @@ public class AppelService {
               + ". Rechargez : vos cases cochées restent sur cet appareil et pourront être enregistrées comme correction.");
     }
     if (d.date().isAfter(EmploiDuTempsService.aujourdhui())) throw ApiException.invalide("On ne peut pas faire l'appel d'un jour qui n'est pas encore arrivé.");
-    if (d.date().getDayOfWeek() == DayOfWeek.SUNDAY) throw ApiException.invalide("Il n'y a pas cours le dimanche.");
+    if (weekEnd(d.date())) throw ApiException.invalide("Il n'y a pas cours le samedi ni le dimanche.");
     Sequence seq = d.sequenceId() == null ? sequenceProposee(sequences.findByAnnee_IdOrderByNumeroAsc(classe.getAnnee().getId())) : sequence(classe, d.sequenceId());
     if (seq == null) throw ApiException.conflit("L'année scolaire n'a pas de séquence.");
     FicheAppel f = new FicheAppel();
@@ -518,5 +520,10 @@ public class AppelService {
     h.setApres(apres);
     h.setPar(utilisateurs.getReferenceById(moi.id()));
     historique.save(h);
+  }
+
+  /** Les cours vont du lundi au vendredi. */
+  static boolean weekEnd(LocalDate d) {
+    return d.getDayOfWeek() == DayOfWeek.SATURDAY || d.getDayOfWeek() == DayOfWeek.SUNDAY;
   }
 }

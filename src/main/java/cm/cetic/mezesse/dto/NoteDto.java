@@ -32,7 +32,7 @@ public final class NoteDto {
 
   public record MatiereFeuille(String id, String nom, int coefficient, ClasseRef classe, GroupeNom groupe) {}
 
-  public record EleveFeuille(String inscriptionId, String matricule, String nom, String prenoms, Sexe sexe, Double note, Instant majLe) {}
+  public record EleveFeuille(String inscriptionId, String matricule, String nom, String prenoms, Sexe sexe, Double note, Instant majLe, int numero) {}
 
   /** Feuille de notes d'une matière pour une séquence : tous les élèves actifs de la classe. */
   public record Feuille(MatiereFeuille matiere, SequenceVue sequence, String competence, List<EleveFeuille> eleves) {}
@@ -77,7 +77,7 @@ public final class NoteDto {
   public record MatiereReleve(String id, String nom, int coefficient, String groupe, String professeur, boolean evaluee, Double moyenne) {}
 
   public record EleveReleve(
-      String inscriptionId, String eleveId, String matricule, String nom, String prenoms, Sexe sexe, List<Double> notes, Double moyenne, Rang rang) {}
+      String inscriptionId, String eleveId, String matricule, String nom, String prenoms, Sexe sexe, List<Double> notes, Double moyenne, Rang rang, int numero) {}
 
   /** Relevé de toute une classe pour une période (consultation par la direction). */
   public record ReleveClasse(ClasseReleve classe, Periode periode, List<MatiereReleve> matieres, List<EleveReleve> eleves, ProfilClasse profil) {}

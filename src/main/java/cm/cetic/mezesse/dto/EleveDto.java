@@ -89,7 +89,9 @@ public final class EleveDto {
       Vue eleve,
       ClasseRef classe,
       AnneeRef annee,
-      List<RenvoiVue> renvois) {}
+      List<RenvoiVue> renvois,
+      /** Numéro d'ordre dans la classe (1, 2… dans l'ordre alphabétique). */
+      int numero) {}
 
   public record InscriptionVue(
       String id,

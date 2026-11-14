@@ -100,6 +100,8 @@ public class EleveService {
   private final Validator validateur;
   private final ObjectMapper json;
   private final PlatformTransactionManager transactions;
+  private final NumerosEleves numerosEleves;
+  private final cm.cetic.mezesse.repository.DecisionExclusionRepository decisionsExclusion;
 
   /** Champs de la fiche qu'une désapprobation remet en l'état (AnnulationService). */
   static Map<String, Object> fiche(Eleve e) {
@@ -132,7 +134,8 @@ public class EleveService {
                     cb.like(cb.lower(eleve.get("matricule")), motif, '\\'),
                     cb.like(cb.lower(eleve.get("matriculeNational")), motif, '\\')));
           }
-          query.orderBy(cb.asc(classe.get("niveau")), cb.asc(eleve.get("nom")), cb.asc(eleve.get("prenoms")));
+          // Par classe, puis par nom : les numéros d'ordre se suivent dans chaque classe.
+          query.orderBy(cb.asc(classe.get("niveau")), cb.asc(classe.get("nom")), cb.asc(eleve.get("nom")), cb.asc(eleve.get("prenoms")));
           return cb.and(conditions.toArray(Predicate[]::new));
         };
     List<Inscription> liste = inscriptions.findAll(spec);
@@ -142,13 +145,14 @@ public class EleveService {
         dernierRenvoi.putIfAbsent(r.getInscription().getId(), RenvoiVue.de(r));
       }
     }
+    Map<String, Integer> numeros = numerosEleves.deClasses(liste.stream().map(Inscription::getClasseId).distinct().toList());
     return liste.stream()
         .map(
             i ->
                 new Ligne(
                     i.getId(), i.getEleveId(), i.getAnneeId(), i.getClasseId(), i.isRedoublant(), i.getStatut(), i.getCreeLe(), Vue.de(i.getEleve()),
                     classeRef(i.getClasse()), anneeRef(i.getAnnee()),
-                    dernierRenvoi.containsKey(i.getId()) ? List.of(dernierRenvoi.get(i.getId())) : List.of()))
+                    dernierRenvoi.containsKey(i.getId()) ? List.of(dernierRenvoi.get(i.getId())) : List.of(), numeros.getOrDefault(i.getId(), 0)))
         .toList();
   }
 
@@ -527,6 +531,13 @@ public class EleveService {
     List<String> aInscrire = d.eleveIds().stream().distinct().filter(id -> !deja.contains(id)).toList();
     List<Eleve> trouves = eleves.findByIdIn(aInscrire);
     if (trouves.size() != aInscrire.size()) throw ApiException.invalide("Un des élèves choisis est introuvable.");
+    // Une exclusion définitive est pour toujours : l'élève ne revient pas l'année suivante.
+    List<String> exclus = aInscrire.isEmpty() ? List.of() : decisionsExclusion.elevesExclusDefinitivement(aInscrire);
+    if (!exclus.isEmpty()) {
+      throw ApiException.invalide(
+          "Exclu(e) définitivement, ne peut pas être réinscrit(e) : "
+              + String.join(", ", trouves.stream().filter(e -> exclus.contains(e.getId())).map(Eleve::nomComplet).toList()) + ".");
+    }
     List<String> creees = new ArrayList<>();
     for (Eleve e : trouves) {
       Inscription i = new Inscription();

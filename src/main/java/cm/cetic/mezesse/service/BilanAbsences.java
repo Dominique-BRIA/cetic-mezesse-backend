@@ -48,16 +48,19 @@ public class BilanAbsences {
     static final Heures RIEN = new Heures(0, 0, 0, 0);
   }
 
-  /** Sanction réglée par le SG : nom, ligne du bulletin, à partir de combien de minutes (incluses). */
+  /** Palier réglé par le SG : sanction (avertissement, blâme, exclusion), à partir de combien de minutes (incluses). */
   public record Regle(String libelle, Sanction ligne, int minutes) {}
 
-  /** Sanction retenue : ligne du bulletin et nom choisi par le SG (vide : aucune). */
+  /** Sanction retenue : ligne du bulletin et libellé affiché (vide : aucune). */
   public record Retenue(Sanction ligne, String libelle) {
     static final Retenue AUCUNE = new Retenue(Sanction.AUCUNE, null);
   }
 
-  /** Bloc « Discipline » d'un élève pour une période. */
-  public record Discipline(Heures periode, int cumulNonJustifiees, Retenue retenue, int joursExclusion, boolean paliersExclusionAtteint) {
+  /**
+   * Bloc « Discipline » d'un élève pour une période. {@code exclusion} : décision du Directeur qui s'applique à la
+   * période (TEMPORAIRE, DEFINITIVE, SURSIS), ou null.
+   */
+  public record Discipline(Heures periode, int cumulNonJustifiees, Retenue retenue, int joursExclusion, boolean paliersExclusionAtteint, String exclusion) {
     public Sanction sanction() {
       return retenue.ligne();
     }
@@ -67,26 +70,33 @@ public class BilanAbsences {
   private final InscriptionRepository inscriptions;
   private final RenvoiRepository renvois;
   private final SanctionAbsenceRepository sanctions;
+  private final cm.cetic.mezesse.repository.DecisionExclusionRepository decisions;
+  private final NumerosEleves numerosEleves;
   private final UtilisateurRepository utilisateurs;
   private final NotificationService notifications;
 
   // ---------- Règles ----------
 
   /**
-   * Sanction de la période : un renvoi prononcé par le Proviseur l'emporte (exclusion) ; sinon la plus élevée
-   * atteinte parmi celles réglées par le SG. Une sanction d'exclusion n'est jamais automatique : sans renvoi,
-   * l'élève prend la plus élevée des autres sanctions atteintes.
+   * Sanction de la période. La décision du Directeur l'emporte : exclusion définitive, exclusion temporaire (ou un
+   * renvoi prononcé directement), sursis (blâme avec la mention du sursis). Sans décision, la plus élevée des
+   * sanctions atteintes, l'exclusion mise à part : elle n'est jamais automatique.
    */
-  static Retenue sanction(int cumulNonJustifiees, List<Regle> regles, int joursExclusion) {
+  static Retenue sanction(int cumulNonJustifiees, List<Regle> regles, int joursExclusion, String decision) {
+    if ("DEFINITIVE".equals(decision)) return new Retenue(Sanction.EXCLUSION, "Exclusion définitive");
+    if ("TEMPORAIRE".equals(decision) || joursExclusion > 0) return new Retenue(Sanction.EXCLUSION, "Exclusion temporaire");
+    if ("SURSIS".equals(decision)) return new Retenue(Sanction.BLAME, "Blâme conduite (exclusion avec sursis)");
     List<Regle> atteintes = regles.stream().filter(r -> cumulNonJustifiees >= r.minutes()).sorted(Comparator.comparingInt(Regle::minutes).reversed()).toList();
-    if (joursExclusion > 0) {
-      String nom = atteintes.stream().filter(r -> r.ligne() == Sanction.EXCLUSION).map(Regle::libelle).findFirst().orElse("Exclusion");
-      return new Retenue(Sanction.EXCLUSION, nom);
-    }
     return atteintes.stream().filter(r -> r.ligne() != Sanction.EXCLUSION).findFirst().map(r -> new Retenue(r.ligne(), r.libelle())).orElse(Retenue.AUCUNE);
   }
 
-  /** Premier palier d'exclusion (le Proviseur est prévenu à partir de là) ; vide : aucune sanction d'exclusion. */
+  /** Décision la plus forte parmi celles de la période : définitive, puis temporaire, puis sursis. */
+  static String decisionRetenue(List<String> types) {
+    for (String t : List.of("DEFINITIVE", "TEMPORAIRE", "SURSIS")) if (types.contains(t)) return t;
+    return null;
+  }
+
+  /** Heures d'exclusion (le Directeur est prévenu à partir de là) ; vide : palier non utilisé. */
   static Integer palierExclusion(List<Regle> regles) {
     return regles.stream().filter(r -> r.ligne() == Sanction.EXCLUSION).map(Regle::minutes).min(Integer::compare).orElse(null);
   }
@@ -185,11 +195,20 @@ public class BilanAbsences {
         ids.isEmpty() ? Map.of() : renvois.desInscriptions(ids).stream().collect(Collectors.groupingBy(r -> r.getInscription().getId()));
     List<Regle> regles = regles();
     Integer ex = palierExclusion(regles);
+    // Décisions du Directeur rattachées aux séquences de la période ; les renvois qu'elles ont créés ne se comptent pas deux fois.
+    List<cm.cetic.mezesse.entity.DecisionExclusion> toutes = ids.isEmpty() ? List.of() : decisions.findByInscriptionIdInOrderByCreeLeAsc(ids);
+    Set<String> renvoisDecides = toutes.stream().map(cm.cetic.mezesse.entity.DecisionExclusion::getRenvoiId).filter(java.util.Objects::nonNull).collect(Collectors.toSet());
+    Map<String, List<cm.cetic.mezesse.entity.DecisionExclusion>> decisionsPar =
+        toutes.stream().filter(x -> seqs.contains(x.getSequence())).collect(Collectors.groupingBy(cm.cetic.mezesse.entity.DecisionExclusion::getInscriptionId));
     Map<String, Discipline> r = new LinkedHashMap<>();
     for (String id : ids) {
-      int jours = parInscription.getOrDefault(id, List.of()).stream().mapToInt(x -> joursDansPeriode(x, du, au)).sum();
+      List<cm.cetic.mezesse.entity.DecisionExclusion> siennes = decisionsPar.getOrDefault(id, List.of());
+      int jours =
+          parInscription.getOrDefault(id, List.of()).stream().filter(x -> !renvoisDecides.contains(x.getId())).mapToInt(x -> joursDansPeriode(x, du, au)).sum()
+              + siennes.stream().filter(x -> x.getJours() != null).mapToInt(cm.cetic.mezesse.entity.DecisionExclusion::getJours).sum();
+      String decision = decisionRetenue(siennes.stream().map(x -> x.getType().name()).toList());
       int nj = cumul.getOrDefault(id, Heures.RIEN).nonJustifiees();
-      r.put(id, new Discipline(dansPeriode.getOrDefault(id, Heures.RIEN), nj, sanction(nj, regles, jours), jours, ex != null && nj >= ex));
+      r.put(id, new Discipline(dansPeriode.getOrDefault(id, Heures.RIEN), nj, sanction(nj, regles, jours, decision), jours, ex != null && nj >= ex, decision));
     }
     return r;
   }
@@ -197,8 +216,8 @@ public class BilanAbsences {
   // ---------- Palier d'exclusion ----------
 
   /**
-   * Après une opération qui ajoute des heures non justifiées : les élèves qui atteignent le palier
-   * d'exclusion sont signalés une fois au Proviseur, qui décide de l'exclusion.
+   * Après une opération qui ajoute des heures non justifiées : les élèves qui atteignent les heures
+   * d'exclusion sont signalés une fois au Directeur, qui décide : exclusion définitive, temporaire, ou sursis.
    */
   @Transactional(propagation = Propagation.MANDATORY)
   public void verifierPalier(Collection<String> inscriptionIds) {
@@ -210,16 +229,16 @@ public class BilanAbsences {
     List<String> aVoir = inscriptionIds.stream().filter(i -> !deja.contains(i)).distinct().toList();
     if (aVoir.isEmpty()) return;
     Map<String, Heures> cumul = heures(aVoir, List.of(1, 2, 3, 4, 5, 6));
-    List<String> proviseurs = utilisateurs.findByRoleOrderByNomAscPrenomAsc(Role.PROVISEUR).stream().filter(Utilisateur::isActif).map(Utilisateur::getId).toList();
+    List<String> direction = utilisateurs.findByRoleOrderByNomAscPrenomAsc(Role.PROVISEUR).stream().filter(Utilisateur::isActif).map(Utilisateur::getId).toList();
     for (Inscription i : inscriptions.activesParIds(aVoir)) {
       int nj = cumul.getOrDefault(i.getId(), Heures.RIEN).nonJustifiees();
       if (nj < ex) continue;
       sql.update("INSERT INTO \"AlerteExclusion\" (\"inscriptionId\", minutes) VALUES (:i, :m) ON CONFLICT DO NOTHING", Map.of("i", i.getId(), "m", nj));
       notifications.notifier(
-          proviseurs, "Palier d'exclusion atteint",
-          i.getEleve().nomComplet() + " (" + i.getClasse().getNom() + ") a " + duree(nj) + " d'absences non justifiées depuis la rentrée (palier : " + duree(ex)
-              + "). L'exclusion est à votre décision ; sans exclusion, le bulletin portera la sanction la plus élevée atteinte.",
-          "/eleves/" + i.getEleveId());
+          direction, "Heures d'exclusion atteintes",
+          i.getEleve().nomComplet() + " (" + i.getClasse().getNom() + ") a " + duree(nj) + " d'absences non justifiées depuis la rentrée (exclusion à partir de "
+              + duree(ex) + "). À vous de décider (Bilan des absences ou liste des élèves) : exclusion définitive, exclusion temporaire ou sursis.",
+          "/absences/bilan?classe=" + i.getClasse().getId());
     }
   }
 
@@ -228,18 +247,27 @@ public class BilanAbsences {
     Map<String, Discipline> d = discipline(classeId, periode);
     List<Inscription> liste = inscriptions.deLaClasse(classeId);
     Set<String> prevenus = alertes(d.keySet());
+    // Dernière décision de l'année pour chaque élève (affichée, et annulable par le Directeur).
+    Map<String, cm.cetic.mezesse.dto.AbsencesDto.DecisionVue> derniere = new HashMap<>();
+    if (!d.isEmpty()) {
+      for (cm.cetic.mezesse.entity.DecisionExclusion x : decisions.findByInscriptionIdInOrderByCreeLeAsc(d.keySet())) {
+        derniere.put(x.getInscriptionId(), new cm.cetic.mezesse.dto.AbsencesDto.DecisionVue(x.getId(), x.getType().name(), x.getJours(), x.getDate(), x.getMotif()));
+      }
+    }
+    Map<String, Integer> numeros = numerosEleves.deClasses(List.of(classeId));
     List<cm.cetic.mezesse.dto.AbsencesDto.BilanEleve> eleves = new ArrayList<>();
     for (Inscription i : liste) {
       Discipline x = d.get(i.getId());
       eleves.add(new cm.cetic.mezesse.dto.AbsencesDto.BilanEleve(
           i.getId(), i.getEleve().getId(), i.getEleve().getNom(), i.getEleve().getPrenoms(), i.getEleve().getMatricule(), x.periode().seances(),
           x.periode().minutes(), x.periode().justifiees(), x.periode().nonJustifiees(), x.cumulNonJustifiees(), x.sanction().name(), x.retenue().libelle(), x.joursExclusion(),
-          x.paliersExclusionAtteint(), prevenus.contains(i.getId())));
+          x.paliersExclusionAtteint(), prevenus.contains(i.getId()), derniere.get(i.getId()), numeros.getOrDefault(i.getId(), 0), i.getClasse().getId(),
+          i.getClasse().getNom()));
     }
     return new cm.cetic.mezesse.dto.AbsencesDto.Bilan(classeId, periode.name(), regles(), eleves);
   }
 
-  /** Élèves déjà signalés au Proviseur pour le palier d'exclusion. */
+  /** Élèves déjà signalés au Directeur pour les heures d'exclusion. */
   public Set<String> alertes(Collection<String> inscriptionIds) {
     if (inscriptionIds.isEmpty()) return Set.of();
     return Set.copyOf(sql.queryForList("SELECT \"inscriptionId\" FROM \"AlerteExclusion\" WHERE \"inscriptionId\" IN (:ins)", Map.of("ins", inscriptionIds), String.class));

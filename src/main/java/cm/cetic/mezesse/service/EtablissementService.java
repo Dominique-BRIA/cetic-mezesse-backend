@@ -102,20 +102,29 @@ public class EtablissementService {
     return sanctionsAbsences.findAllByOrderByMinutesAsc().stream().map(s -> new SanctionVue(s.getId(), s.getLibelle(), s.getLigne(), s.getMinutes())).toList();
   }
 
-  /** Le SG remplace toute la liste des sanctions pour absences non justifiées (comme un barème). */
+  /** Les trois paliers et leur libellé, tel qu'il s'affiche et s'imprime. */
+  public static final Map<BilanAbsences.Sanction, String> NOMS_SANCTIONS =
+      Map.of(BilanAbsences.Sanction.AVERTISSEMENT, "Avertissement conduite", BilanAbsences.Sanction.BLAME, "Blâme conduite", BilanAbsences.Sanction.EXCLUSION, "Exclusion");
+
+  /** Le SG règle les heures des trois paliers (avertissement, blâme, exclusion) ; un palier sans heures n'est pas utilisé. */
   @Transactional
   public List<SanctionVue> remplacerSanctions(UtilisateurConnecte moi, List<SanctionLigne> lignes) {
-    List<BilanAbsences.Regle> regles = lignes.stream().map(l -> new BilanAbsences.Regle(l.libelle(), l.ligne(), (int) Math.round(l.heures() * 60))).toList();
-    if (new HashSet<>(regles.stream().map(BilanAbsences.Regle::minutes).toList()).size() != regles.size()) {
-      throw ApiException.invalide("Deux sanctions partent du même nombre d'heures.");
-    }
-    if (new HashSet<>(regles.stream().map(r -> r.libelle().toLowerCase(java.util.Locale.ROOT)).toList()).size() != regles.size()) {
-      throw ApiException.invalide("Deux sanctions ont le même nom.");
+    if (lignes.stream().anyMatch(l -> !NOMS_SANCTIONS.containsKey(l.ligne()))) throw ApiException.invalide("Sanctions possibles : avertissement, blâme, exclusion.");
+    if (new HashSet<>(lignes.stream().map(SanctionLigne::ligne).toList()).size() != lignes.size()) throw ApiException.invalide("Chaque sanction ne figure qu'une fois.");
+    List<BilanAbsences.Regle> regles =
+        lignes.stream()
+            .filter(l -> l.heures() != null && l.heures() > 0)
+            .sorted(Comparator.comparing(SanctionLigne::ligne))
+            .map(l -> new BilanAbsences.Regle(NOMS_SANCTIONS.get(l.ligne()), l.ligne(), (int) Math.round(l.heures() * 60)))
+            .toList();
+    for (int k = 1; k < regles.size(); k++) {
+      if (regles.get(k).minutes() <= regles.get(k - 1).minutes()) {
+        throw ApiException.invalide(regles.get(k).libelle() + " doit partir de plus d'heures que " + regles.get(k - 1).libelle().toLowerCase(java.util.Locale.ROOT) + ".");
+      }
     }
     List<Map<String, Object>> avant = sanctions().stream().map(v -> Donnees.objet("libelle", v.libelle(), "ligne", v.ligne().name(), "minutes", v.minutes())).toList();
     remplacerSanctions(regles);
-    List<String> resume =
-        regles.stream().sorted(Comparator.comparingInt(BilanAbsences.Regle::minutes)).map(r -> r.libelle() + " dès " + BilanAbsences.duree(r.minutes())).toList();
+    List<String> resume = regles.stream().map(r -> r.libelle() + " dès " + BilanAbsences.duree(r.minutes())).toList();
     journal.consigner(
         moi, DomaineDecision.ADMINISTRATION, "sanctions.liste",
         "Sanctions pour absences non justifiées : " + (resume.isEmpty() ? "aucune" : String.join(", ", resume)), "/parametres",

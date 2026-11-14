@@ -13,54 +13,59 @@ import org.junit.jupiter.api.Test;
 
 class BilanAbsencesTest {
 
-  // Sanctions réglées par le SG (en minutes) : mise en garde 4 h, avertissement 10 h, blâme 20 h,
-  // exclusion 30 h, conseil de discipline 40 h (ligne d'exclusion aussi).
+  // Paliers réglés par le SG (en minutes) : avertissement 6 h, blâme 10 h, exclusion 15 h.
   private static final List<Regle> REGLES =
       List.of(
-          new Regle("Mise en garde", Sanction.AUCUNE, 240),
-          new Regle("Avertissement", Sanction.AVERTISSEMENT, 600),
-          new Regle("Blâme", Sanction.BLAME, 1200),
-          new Regle("Exclusion 3 jours", Sanction.EXCLUSION, 1800),
-          new Regle("Conseil de discipline", Sanction.EXCLUSION, 2400));
+          new Regle("Avertissement conduite", Sanction.AVERTISSEMENT, 360),
+          new Regle("Blâme conduite", Sanction.BLAME, 600),
+          new Regle("Exclusion", Sanction.EXCLUSION, 900));
 
-  private static Retenue s(int minutes, int jours) {
-    return BilanAbsences.sanction(minutes, REGLES, jours);
+  private static Retenue s(int minutes, int jours, String decision) {
+    return BilanAbsences.sanction(minutes, REGLES, jours, decision);
   }
 
   @Test
   void seuleLaPlusEleveeEstRetenue() {
-    assertThat(s(0, 0)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
-    assertThat(s(239, 0)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
-    assertThat(s(240, 0)).isEqualTo(new Retenue(Sanction.AUCUNE, "Mise en garde"));
-    assertThat(s(600, 0)).isEqualTo(new Retenue(Sanction.AVERTISSEMENT, "Avertissement"));
-    assertThat(s(1250, 0)).isEqualTo(new Retenue(Sanction.BLAME, "Blâme"));
+    assertThat(s(0, 0, null)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
+    assertThat(s(359, 0, null)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
+    assertThat(s(360, 0, null)).isEqualTo(new Retenue(Sanction.AVERTISSEMENT, "Avertissement conduite"));
+    assertThat(s(700, 0, null)).isEqualTo(new Retenue(Sanction.BLAME, "Blâme conduite"));
   }
 
   @Test
-  void exclusionSansRenvoiDonneLaPlusEleveeDesAutres() {
-    assertThat(s(2000, 0)).isEqualTo(new Retenue(Sanction.BLAME, "Blâme"));
-    assertThat(s(5000, 0)).isEqualTo(new Retenue(Sanction.BLAME, "Blâme"));
-    // Sans autre sanction atteinte : rien.
-    assertThat(BilanAbsences.sanction(2000, List.of(new Regle("Exclusion", Sanction.EXCLUSION, 1800)), 0)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
+  void heuresDExclusionSansDecisionDonnentLeBlame() {
+    // L'exclusion n'est jamais automatique : en attendant la décision du Directeur, le blâme.
+    assertThat(s(1000, 0, null)).isEqualTo(new Retenue(Sanction.BLAME, "Blâme conduite"));
+    assertThat(BilanAbsences.sanction(1000, List.of(new Regle("Exclusion", Sanction.EXCLUSION, 900)), 0, null)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
   }
 
   @Test
-  void leRenvoiDuProviseurLEmporte() {
-    assertThat(s(2000, 3)).isEqualTo(new Retenue(Sanction.EXCLUSION, "Exclusion 3 jours"));
-    assertThat(s(2500, 8)).isEqualTo(new Retenue(Sanction.EXCLUSION, "Conseil de discipline"));
-    // Renvoi prononcé avant tout palier d'exclusion.
-    assertThat(s(100, 2)).isEqualTo(new Retenue(Sanction.EXCLUSION, "Exclusion"));
+  void decisionsDuDirecteur() {
+    assertThat(s(1000, 3, "TEMPORAIRE")).isEqualTo(new Retenue(Sanction.EXCLUSION, "Exclusion temporaire"));
+    assertThat(s(1000, 0, "DEFINITIVE")).isEqualTo(new Retenue(Sanction.EXCLUSION, "Exclusion définitive"));
+    assertThat(s(1000, 0, "SURSIS")).isEqualTo(new Retenue(Sanction.BLAME, "Blâme conduite (exclusion avec sursis)"));
+    // Un renvoi prononcé directement (page Élèves renvoyés) compte comme une exclusion temporaire.
+    assertThat(s(100, 2, null)).isEqualTo(new Retenue(Sanction.EXCLUSION, "Exclusion temporaire"));
+    // Plusieurs décisions dans la période : la plus forte.
+    assertThat(BilanAbsences.decisionRetenue(List.of("SURSIS", "TEMPORAIRE"))).isEqualTo("TEMPORAIRE");
+    assertThat(BilanAbsences.decisionRetenue(List.of("TEMPORAIRE", "DEFINITIVE"))).isEqualTo("DEFINITIVE");
+    assertThat(BilanAbsences.decisionRetenue(List.of())).isNull();
   }
 
   @Test
-  void premierPalierDExclusion() {
-    assertThat(BilanAbsences.palierExclusion(REGLES)).isEqualTo(1800);
-    assertThat(BilanAbsences.palierExclusion(REGLES.subList(0, 3))).isNull();
+  void palierDExclusion() {
+    assertThat(BilanAbsences.palierExclusion(REGLES)).isEqualTo(900);
+    assertThat(BilanAbsences.palierExclusion(REGLES.subList(0, 2))).isNull();
   }
 
   @Test
-  void aucuneSanctionReglee() {
-    assertThat(BilanAbsences.sanction(5000, List.of(), 0)).isEqualTo(new Retenue(Sanction.AUCUNE, null));
+  void repriseApresJoursOuvres() {
+    // Exclusion de 3 jours à partir du jeudi 12/11/2026 : jeudi, vendredi, lundi ; retour le mardi 17.
+    assertThat(ExclusionService.reprise(java.time.LocalDate.of(2026, 11, 12), 3)).isEqualTo(java.time.LocalDate.of(2026, 11, 17));
+    // 1 jour le vendredi 13 : retour le lundi 16.
+    assertThat(ExclusionService.reprise(java.time.LocalDate.of(2026, 11, 13), 1)).isEqualTo(java.time.LocalDate.of(2026, 11, 16));
+    // 5 jours à partir du lundi 16 : retour le lundi 23.
+    assertThat(ExclusionService.reprise(java.time.LocalDate.of(2026, 11, 16), 5)).isEqualTo(java.time.LocalDate.of(2026, 11, 23));
   }
 
   @Test

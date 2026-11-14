@@ -339,8 +339,9 @@ public final class BulletinPdf {
     v[1] = cm.cetic.mezesse.service.BilanAbsences.duree(d.periode().justifiees());
     switch (d.sanction()) {
       case AVERTISSEMENT -> v[4] = "Oui / Yes";
-      case BLAME -> v[5] = "Oui / Yes";
-      case EXCLUSION -> v[6] = String.valueOf(d.joursExclusion());
+      // Sursis : le blâme, avec la mention de l'exclusion avec sursis.
+      case BLAME -> v[5] = "SURSIS".equals(d.exclusion()) ? "Oui (sursis)" : "Oui / Yes";
+      case EXCLUSION -> v[6] = "DEFINITIVE".equals(d.exclusion()) ? "Définitive" : String.valueOf(d.joursExclusion());
       default -> {}
     }
     return v;

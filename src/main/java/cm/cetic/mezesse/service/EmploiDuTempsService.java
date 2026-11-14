@@ -58,6 +58,7 @@ public class EmploiDuTempsService {
   private final ClasseRepository classes;
   private final MatiereRepository matieres;
   private final JournalDecisions journal;
+  private final org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate sql;
 
   static LocalDate aujourdhui() {
     return LocalDate.now(EnteteOfficiel.CAMEROUN);
@@ -93,14 +94,71 @@ public class EmploiDuTempsService {
       if (choisie == null && !liste.isEmpty()) choisie = liste.get(0);
     }
     List<Version> vues = versionsVues(liste);
-    if (choisie == null) return new Vue(classeId, vues, null, List.of(), 0);
+    if (choisie == null) return new Vue(classeId, vues, null, List.of(), 0, List.of());
     String id = choisie.getId();
     List<Creneau> lignes = creneaux.desVersions(List.of(id));
     List<Creneau> ailleurs = autresClasses(classe, reference(choisie));
     List<cm.cetic.mezesse.dto.EmploiDuTempsDto.Creneau> sortie = new ArrayList<>();
     for (Creneau c : lignes) sortie.add(vue(c, conflits(c.getId(), c.getJour(), c.getDebut(), c.getFin(), c.getMatiere(), lignes, ailleurs)));
     int minutes = lignes.stream().mapToInt(Creneau::duree).sum();
-    return new Vue(classeId, vues, vues.stream().filter(v -> v.id().equals(id)).findFirst().orElseThrow(), sortie, minutes);
+    return new Vue(classeId, vues, vues.stream().filter(v -> v.id().equals(id)).findFirst().orElseThrow(), sortie, minutes, plages(id));
+  }
+
+  // ---------- Lignes horaires ----------
+
+  private List<cm.cetic.mezesse.dto.EmploiDuTempsDto.Plage> plages(String emploiId) {
+    return sql.query(
+        "SELECT id, to_char(debut, 'HH24:MI') AS d, to_char(fin, 'HH24:MI') AS f FROM \"PlageHoraire\" WHERE \"emploiId\" = :e ORDER BY debut, fin",
+        Map.of("e", emploiId),
+        (rs, n) -> new cm.cetic.mezesse.dto.EmploiDuTempsDto.Plage(rs.getString("id"), rs.getString("d"), rs.getString("f")));
+  }
+
+  private String inserePlage(String emploiId, LocalTime debut, LocalTime fin) {
+    String id = "pl" + java.util.UUID.randomUUID().toString().replace("-", "").substring(0, 23);
+    sql.update(
+        "INSERT INTO \"PlageHoraire\" (id, \"emploiId\", debut, fin) VALUES (:id, :e, :d, :f) ON CONFLICT DO NOTHING",
+        Map.of("id", id, "e", emploiId, "d", java.sql.Time.valueOf(debut), "f", java.sql.Time.valueOf(fin)));
+    return id;
+  }
+
+  /** Nouvelle ligne horaire vide ; la première version de l'emploi du temps est créée au besoin. */
+  @Transactional
+  public Vue ajouterPlage(UtilisateurConnecte moi, cm.cetic.mezesse.dto.EmploiDuTempsDto.PlageRequete d) {
+    Classe classe = classes.findById(d.classeId()).orElseThrow(() -> ApiException.introuvable("Classe"));
+    EmploiDuTemps e = versionPour(classe, d.versionId());
+    LocalTime debut = LocalTime.parse(d.debut());
+    LocalTime fin = LocalTime.parse(d.fin());
+    verifierHoraire(debut, fin);
+    String h = HEURE.format(debut) + " – " + HEURE.format(fin);
+    boolean existe =
+        plages(e.getId()).stream().anyMatch(p -> p.debut().equals(HEURE.format(debut)) && p.fin().equals(HEURE.format(fin)))
+            || creneaux.desVersions(List.of(e.getId())).stream().anyMatch(c -> c.getDebut().equals(debut) && c.getFin().equals(fin));
+    if (existe) throw ApiException.conflit("La ligne " + h + " existe déjà.");
+    String id = inserePlage(e.getId(), debut, fin);
+    journal.consigner(
+        moi, DomaineDecision.ORGANISATION, "edt.plage.ajouter", "Emploi du temps de " + classe.getNom() + " : nouvelle ligne " + h, lien(classe.getId()),
+        Donnees.objet("id", id));
+    return vue(classe.getId(), e.getId());
+  }
+
+  /** Retire une ligne horaire ; refusé tant qu'elle a des cours. */
+  @Transactional
+  public Vue supprimerPlage(UtilisateurConnecte moi, String id) {
+    List<Map<String, Object>> r = sql.queryForList("SELECT \"emploiId\", to_char(debut, 'HH24:MI') AS d, to_char(fin, 'HH24:MI') AS f FROM \"PlageHoraire\" WHERE id = :id", Map.of("id", id));
+    if (r.isEmpty()) throw ApiException.introuvable("Ligne");
+    String emploiId = (String) r.get(0).get("emploiId");
+    LocalTime debut = LocalTime.parse((String) r.get(0).get("d"));
+    LocalTime fin = LocalTime.parse((String) r.get(0).get("f"));
+    EmploiDuTemps e = versions.findById(emploiId).orElseThrow(() -> ApiException.introuvable("Version"));
+    if (creneaux.desVersions(List.of(emploiId)).stream().anyMatch(c -> c.getDebut().equals(debut) && c.getFin().equals(fin))) {
+      throw ApiException.conflit("Cette ligne a des cours : retirez-les d'abord.");
+    }
+    sql.update("DELETE FROM \"PlageHoraire\" WHERE id = :id", Map.of("id", id));
+    Classe classe = e.getClasse();
+    journal.consigner(
+        moi, DomaineDecision.ORGANISATION, "edt.plage.supprimer", "Emploi du temps de " + classe.getNom() + " : retrait de la ligne " + HEURE.format(debut) + " – " + HEURE.format(fin),
+        lien(classe.getId()), Donnees.objet("emploiId", emploiId, "debut", HEURE.format(debut), "fin", HEURE.format(fin)));
+    return vue(classe.getId(), e.getId());
   }
 
   private static List<Version> versionsVues(List<EmploiDuTemps> liste) {
@@ -194,6 +252,7 @@ public class EmploiDuTempsService {
         copies++;
       }
       creneaux.flush();
+      for (cm.cetic.mezesse.dto.EmploiDuTempsDto.Plage p : plages(source.getId())) inserePlage(e.getId(), LocalTime.parse(p.debut()), LocalTime.parse(p.fin()));
     }
     journal.consigner(
         moi, DomaineDecision.ORGANISATION, "edt.version.creer",
@@ -265,6 +324,69 @@ public class EmploiDuTempsService {
         "Emploi du temps de " + classe.getNom() + " : " + libelleAvant + " devient " + m.getNom() + " " + quand(d.jour(), debut, fin) + note,
         lien(classe.getId()), Donnees.objet("id", id, "avant", avant, "apres", champs(c)));
     return vue(classe.getId(), e.getId());
+  }
+
+  /**
+   * Nouvel horaire pour toute une ligne de l'emploi du temps : chaque cours de cet horaire, quel que soit le jour,
+   * prend le nouvel horaire. Refusé s'il chevauche un autre cours de la classe ; un enseignant attendu ailleurs à
+   * cette heure est signalé (comme pour un créneau).
+   */
+  @Transactional
+  public Vue modifierHoraire(UtilisateurConnecte moi, cm.cetic.mezesse.dto.EmploiDuTempsDto.HoraireRequete d) {
+    Classe classe = classes.findById(d.classeId()).orElseThrow(() -> ApiException.introuvable("Classe"));
+    EmploiDuTemps e = versionPour(classe, d.versionId());
+    LocalTime ancienDebut = LocalTime.parse(d.ancienDebut());
+    LocalTime ancienFin = LocalTime.parse(d.ancienFin());
+    LocalTime debut = LocalTime.parse(d.debut());
+    LocalTime fin = LocalTime.parse(d.fin());
+    verifierHoraire(debut, fin);
+    List<Creneau> tous = creneaux.desVersions(List.of(e.getId()));
+    List<Creneau> ligne = tous.stream().filter(c -> c.getDebut().equals(ancienDebut) && c.getFin().equals(ancienFin)).toList();
+    boolean plageSaisie = plages(e.getId()).stream().anyMatch(p -> p.debut().equals(HEURE.format(ancienDebut)) && p.fin().equals(HEURE.format(ancienFin)));
+    if (ligne.isEmpty() && !plageSaisie) throw ApiException.introuvable("Horaire");
+    if (debut.equals(ancienDebut) && fin.equals(ancienFin)) return vue(classe.getId(), e.getId());
+    List<Creneau> autres = tous.stream().filter(c -> !ligne.contains(c)).toList();
+    for (Creneau c : ligne) {
+      for (Creneau o : autres) {
+        if (o.getJour() == c.getJour() && chevauchent(debut, fin, o.getDebut(), o.getFin())) {
+          throw ApiException.invalide(
+              "Le " + JOURS[c.getJour()] + ", " + HEURE.format(debut) + " – " + HEURE.format(fin) + " chevauche " + o.getMatiere().getNom() + " (" + HEURE.format(o.getDebut())
+                  + " – " + HEURE.format(o.getFin()) + ").");
+        }
+      }
+    }
+    List<Creneau> ailleurs = autresClasses(classe, reference(e));
+    List<Candidat> candidats = new ArrayList<>();
+    for (Creneau c : ligne) {
+      for (Conflit k : conflits(c.getId(), c.getJour(), debut, fin, c.getMatiere(), List.of(), ailleurs)) {
+        candidats.add(new Candidat(null, "creneau", k.matiere() + " de " + k.debut() + " à " + k.fin() + " (" + k.classe() + ")", "Même enseignant, en " + k.classe(), "HORAIRE", null, null, null));
+      }
+    }
+    String note = Doublons.avertir("Un enseignant est attendu ailleurs à ce nouvel horaire", candidats);
+    for (Creneau c : ligne) {
+      c.setDebut(debut);
+      c.setFin(fin);
+    }
+    creneaux.saveAllAndFlush(ligne);
+    deplacerPlage(e.getId(), ancienDebut, ancienFin, debut, fin);
+    journal.consigner(
+        moi, DomaineDecision.ORGANISATION, "edt.horaire.modifier",
+        "Emploi du temps de " + classe.getNom() + " : l'horaire " + HEURE.format(ancienDebut) + " – " + HEURE.format(ancienFin) + " devient " + HEURE.format(debut) + " – "
+            + HEURE.format(fin) + " (" + ligne.size() + " cours)" + note,
+        lien(classe.getId()),
+        Donnees.objet(
+            "emploiId", e.getId(), "ids", ligne.stream().map(Creneau::getId).toList(), "ancienDebut", HEURE.format(ancienDebut), "ancienFin", HEURE.format(ancienFin), "debut", HEURE.format(debut),
+            "fin", HEURE.format(fin)));
+    return vue(classe.getId(), e.getId());
+  }
+
+  /** La ligne saisie prend le nouvel horaire (si une ligne a déjà cet horaire, l'ancienne disparaît). */
+  private void deplacerPlage(String emploiId, LocalTime ancienDebut, LocalTime ancienFin, LocalTime debut, LocalTime fin) {
+    Map<String, Object> p =
+        Map.of("e", emploiId, "ad", java.sql.Time.valueOf(ancienDebut), "af", java.sql.Time.valueOf(ancienFin), "d", java.sql.Time.valueOf(debut), "f", java.sql.Time.valueOf(fin));
+    Integer deja = sql.queryForObject("SELECT count(*)::int FROM \"PlageHoraire\" WHERE \"emploiId\" = :e AND debut = :d AND fin = :f", p, Integer.class);
+    if (deja != null && deja > 0) sql.update("DELETE FROM \"PlageHoraire\" WHERE \"emploiId\" = :e AND debut = :ad AND fin = :af", p);
+    else sql.update("UPDATE \"PlageHoraire\" SET debut = :d, fin = :f WHERE \"emploiId\" = :e AND debut = :ad AND fin = :af", p);
   }
 
   @Transactional
@@ -374,6 +496,32 @@ public class EmploiDuTempsService {
         c.setDebut(LocalTime.parse(texte(avant.get("debut"))));
         c.setFin(LocalTime.parse(texte(avant.get("fin"))));
         yield "Le créneau a repris son ancienne valeur : " + m.getNom() + " " + quand(c.getJour(), c.getDebut(), c.getFin()) + ".";
+      }
+      case "edt.horaire.modifier" -> {
+        // Les cours qui ont encore le nouvel horaire reprennent l'ancien.
+        LocalTime debut = LocalTime.parse(texte(a.get("debut")));
+        LocalTime fin = LocalTime.parse(texte(a.get("fin")));
+        int n = 0;
+        if (a.get("ids") instanceof List<?> ids) {
+          for (Object id : ids) {
+            Creneau c = creneaux.findById(texte(id)).orElse(null);
+            if (c == null || !c.getDebut().equals(debut) || !c.getFin().equals(fin)) continue;
+            c.setDebut(LocalTime.parse(texte(a.get("ancienDebut"))));
+            c.setFin(LocalTime.parse(texte(a.get("ancienFin"))));
+            n++;
+          }
+        }
+        if (a.get("emploiId") != null) deplacerPlage(texte(a.get("emploiId")), debut, fin, LocalTime.parse(texte(a.get("ancienDebut"))), LocalTime.parse(texte(a.get("ancienFin"))));
+        yield n == 0 ? "La ligne a repris l'horaire " + texte(a.get("ancienDebut")) + " – " + texte(a.get("ancienFin")) + "." : n + " cours ont repris l'horaire " + texte(a.get("ancienDebut")) + " – " + texte(a.get("ancienFin")) + ".";
+      }
+      case "edt.plage.ajouter" -> {
+        int n = sql.update("DELETE FROM \"PlageHoraire\" WHERE id = :id", Map.of("id", texte(a.get("id"))));
+        yield n == 0 ? "Cette ligne avait déjà été retirée." : "La ligne ajoutée a été retirée.";
+      }
+      case "edt.plage.supprimer" -> {
+        if (versions.findById(texte(a.get("emploiId"))).isEmpty()) throw ApiException.conflit("Cette version de l'emploi du temps n'existe plus.");
+        inserePlage(texte(a.get("emploiId")), LocalTime.parse(texte(a.get("debut"))), LocalTime.parse(texte(a.get("fin"))));
+        yield "La ligne " + texte(a.get("debut")) + " – " + texte(a.get("fin")) + " a été remise.";
       }
       case "edt.creneau.supprimer" -> {
         EmploiDuTemps e = versions.findById(texte(a.get("emploiId"))).orElseThrow(() -> ApiException.conflit("Cette version de l'emploi du temps n'existe plus."));

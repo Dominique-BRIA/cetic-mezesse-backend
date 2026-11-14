@@ -26,7 +26,7 @@ public final class AppelDto {
       String id, String creneauId, String matiereId, String matiere, Personne enseignant, Personne remplacant, String debut, String fin, int duree,
       String statut, boolean ajoutee, boolean enseignantAbsent, String motif) {}
 
-  public record EleveVue(String inscriptionId, String eleveId, String nom, String prenoms, String matricule, boolean renvoye) {}
+  public record EleveVue(String inscriptionId, String eleveId, String nom, String prenoms, String matricule, boolean renvoye, int numero) {}
 
   public record Case(@NotBlank String seanceId, @NotBlank String inscriptionId) {}
 

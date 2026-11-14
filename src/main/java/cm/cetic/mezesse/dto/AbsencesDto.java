@@ -22,7 +22,9 @@ public final class AbsencesDto {
   /** Une absence : un élève, une séance d'un jour. « justification » vide : NON_JUSTIFIEE. */
   public record Ligne(
       String id, String inscriptionId, String eleveId, String nom, String prenoms, String matricule, String classeId, String classe, LocalDate date,
-      String seanceId, String matiere, String debut, String fin, int duree, boolean enseignantAbsent, JustificationVue justification) {}
+      String seanceId, String matiere, String debut, String fin, int duree, boolean enseignantAbsent, JustificationVue justification,
+      /** Numéro d'ordre de l'élève dans sa classe. */
+      int numero) {}
 
   /** Totaux du filtre : total = justifiées + non justifiées. */
   public record Totaux(long absences, long minutes, long minutesJustifiees, long minutesNonJustifiees) {}
@@ -57,7 +59,23 @@ public final class AbsencesDto {
    */
   public record BilanEleve(
       String inscriptionId, String eleveId, String nom, String prenoms, String matricule, int seances, int minutes, int justifiees, int nonJustifiees,
-      int cumulNonJustifiees, String sanction, String libelleSanction, int joursExclusion, boolean palierExclusion, boolean proviseurPrevenu) {}
+      int cumulNonJustifiees, String sanction, String libelleSanction, int joursExclusion, boolean palierExclusion, boolean proviseurPrevenu,
+      DecisionVue decision,
+      /** Numéro d'ordre de l'élève dans sa classe. */
+      int numero,
+      String classeId,
+      String classe) {}
+
+  /** Décision du Directeur pour un élève qui a atteint les heures d'exclusion. */
+  public record DecisionVue(String id, String type, Integer jours, LocalDate date, String motif) {}
+
+  /** Exclusion temporaire (1 à 8 jours ouvrés, à partir de {@code date}), définitive, ou sursis. */
+  public record DeciderExclusion(
+      @NotBlank(message = "obligatoire") String inscriptionId,
+      @NotNull(message = "à choisir") cm.cetic.mezesse.entity.DecisionExclusion.Type type,
+      Integer jours,
+      LocalDate date,
+      @Size(max = 500, message = "500 caractères au plus") String motif) {}
 
   /** Bilan d'une classe, avec les sanctions réglées par le SG (minutes, de la plus faible à la plus forte). */
   public record Bilan(String classeId, String periode, List<cm.cetic.mezesse.service.BilanAbsences.Regle> sanctions, List<BilanEleve> eleves) {}

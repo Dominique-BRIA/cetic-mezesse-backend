@@ -68,6 +68,7 @@ public class NoteService {
   private final CompetenceViseeRepository competences;
   private final UtilisateurRepository utilisateurs;
   private final ResultatsService resultats;
+  private final NumerosEleves numerosEleves;
 
   /** Un professeur n'accède qu'à ses matières ; la direction à toutes. */
   public Matiere matiereAccessible(UtilisateurConnecte moi, String matiereId) {
@@ -89,6 +90,7 @@ public class NoteService {
         notes.findByMatiere_IdAndSequence_Id(matiereId, sequenceId).stream().collect(Collectors.toMap(n -> n.getInscription().getId(), Function.identity()));
     String competence = competences.findById(new CompetenceVisee.Cle(matiereId, sequenceId)).map(CompetenceVisee::getTexte).orElse("");
     Classe c = m.getClasse();
+    Map<String, Integer> numeros = numerosEleves.deClasses(List.of(c.getId()));
     List<EleveFeuille> eleves =
         inscriptions.activesDeLaClasse(c.getId()).stream()
             .map(
@@ -97,7 +99,7 @@ public class NoteService {
                   Note n = parInscription.get(i.getId());
                   return new EleveFeuille(
                       i.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), n == null ? null : n.getValeur().doubleValue(),
-                      n == null ? null : n.getMajLe());
+                      n == null ? null : n.getMajLe(), numeros.getOrDefault(i.getId(), 0));
                 })
             .toList();
     return new Feuille(
@@ -201,6 +203,7 @@ public class NoteService {
   public ReleveClasse releve(String classeId, Periode p) {
     DonneesClasse d = resultats.resultatsClasse(classeId, p);
     var r = d.resultats();
+    Map<String, Integer> numeros = numerosEleves.deClasses(List.of(classeId));
     return new ReleveClasse(
         new ClasseReleve(d.classe().getId(), d.classe().getNom(), d.classe().getAnnee().getLibelle()),
         p,
@@ -218,7 +221,7 @@ public class NoteService {
                   Eleve el = i.getEleve();
                   return new EleveReleve(
                       i.getId(), el.getId(), el.getMatricule(), el.getNom(), el.getPrenoms(), el.getSexe(),
-                      e.matieres().stream().map(LigneMatiere::note).toList(), e.moyenne(), e.rang());
+                      e.matieres().stream().map(LigneMatiere::note).toList(), e.moyenne(), e.rang(), numeros.getOrDefault(i.getId(), 0));
                 })
             .toList(),
         r.profil());

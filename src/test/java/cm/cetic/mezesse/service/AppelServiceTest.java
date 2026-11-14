@@ -50,4 +50,13 @@ class AppelServiceTest {
   void renvoiEnCours() {
     assertThat(AppelService.renvoyeLe(List.of(renvoi(LocalDate.of(2026, 11, 10), null)), LocalDate.of(2027, 1, 5))).isTrue();
   }
+
+  @Test
+  void pasDeCoursLeWeekEnd() {
+    // Semaine du 9 au 15 novembre 2026 : lundi à vendredi ouverts, samedi et dimanche fermés.
+    assertThat(AppelService.weekEnd(LocalDate.of(2026, 11, 9))).isFalse();
+    assertThat(AppelService.weekEnd(LocalDate.of(2026, 11, 13))).isFalse();
+    assertThat(AppelService.weekEnd(LocalDate.of(2026, 11, 14))).isTrue();
+    assertThat(AppelService.weekEnd(LocalDate.of(2026, 11, 15))).isTrue();
+  }
 }
