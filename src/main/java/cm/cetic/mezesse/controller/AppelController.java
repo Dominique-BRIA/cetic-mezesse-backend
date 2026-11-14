@@ -35,11 +35,29 @@ public class AppelController {
 
   private final AppelService service;
   private final cm.cetic.mezesse.service.AnneeCouranteService annee;
+  private final cm.cetic.mezesse.service.EtablissementService etablissement;
 
   @GetMapping
   @Direction
   public Vue vue(@RequestParam String classeId, @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
     return service.vue(classeId, date);
+  }
+
+  /** La feuille d'un jour, à imprimer (pdf) ou en classeur (xlsx) ; pas encore enregistrée : vide, à remplir. */
+  @GetMapping("/export")
+  @Direction
+  public org.springframework.http.ResponseEntity<byte[]> exporter(
+      @RequestParam String classeId,
+      @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date,
+      @RequestParam(defaultValue = "pdf") String format) {
+    Vue v = service.vue(classeId, date);
+    String titre = "Feuille d'appel · " + v.classe() + " · " + cm.cetic.mezesse.document.FeuilleAppelExport.jour(v);
+    String nom = "feuille-appel-" + java.text.Normalizer.normalize(v.classe(), java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").replaceAll("[^A-Za-z0-9]+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT) + "-" + date;
+    var etab = etablissement.requis();
+    return AbsenceController.fichier(nom, format,
+        () -> cm.cetic.mezesse.document.FeuilleAppelExport.pdf(etab, titre, v),
+        () -> cm.cetic.mezesse.document.FeuilleAppelExport.excel(titre, v));
   }
 
   /** État de l'appel du jour pour toutes les classes de l'année. */

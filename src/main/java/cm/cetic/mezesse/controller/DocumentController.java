@@ -28,6 +28,7 @@ public class DocumentController {
   private static final MediaType XLSX = MediaType.parseMediaType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
 
   private final DocumentService service;
+  private final cm.cetic.mezesse.service.EtablissementService etablissement;
 
   /** PDF ouvert dans le navigateur. */
   private static ResponseEntity<byte[]> pdf(Fichier f) {
@@ -73,6 +74,17 @@ public class DocumentController {
     if (!format.equals("pdf") && !format.equals("xlsx")) throw ApiException.invalide("format : pdf ou xlsx");
     Fichier f = service.liste(classeId, format.equals("xlsx"));
     return format.equals("xlsx") ? excel(f) : pdf(f);
+  }
+
+  /** Le tableau affiché par une page (colonnes et lignes, filtres compris), en PDF officiel ou en classeur Excel. */
+  @PostMapping("/tableau")
+  public ResponseEntity<byte[]> tableau(@jakarta.validation.Valid @RequestBody cm.cetic.mezesse.dto.DocumentDto.Tableau t) {
+    String base = t.fichier() == null || t.fichier().isBlank() ? t.titre() : t.fichier();
+    String nom = java.text.Normalizer.normalize(base, java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").replaceAll("[^A-Za-z0-9]+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT);
+    if (nom.isEmpty()) nom = "tableau";
+    if ("xlsx".equals(t.format())) return excel(new Fichier(cm.cetic.mezesse.document.TableauExport.excel(t), nom, 0));
+    return pdf(new Fichier(cm.cetic.mezesse.document.TableauExport.pdf(etablissement.requis(), t), nom, 0));
   }
 
   @GetMapping("/releve")

@@ -94,13 +94,28 @@ public class Pdf implements AutoCloseable {
     info.setCreator("CETIC de Mezesse, gestion scolaire");
   }
 
+  /** Largeur de la page en cours (portrait : LARGEUR ; paysage : HAUTEUR). */
+  public float largeurPage() {
+    return page == null ? LARGEUR : page.getMediaBox().getWidth();
+  }
+
+  /** Hauteur de la page en cours. */
+  public float hauteurPage() {
+    return page == null ? HAUTEUR : page.getMediaBox().getHeight();
+  }
+
   public int nombrePages() {
     return pages.size();
   }
 
   public void nouvellePage() {
+    nouvellePage(false);
+  }
+
+  /** Nouvelle page A4, en portrait ou en paysage (tableaux larges). */
+  public void nouvellePage(boolean paysage) {
     fermerFlux();
-    page = new PDPage(new PDRectangle(LARGEUR, HAUTEUR));
+    page = new PDPage(paysage ? new PDRectangle(HAUTEUR, LARGEUR) : new PDRectangle(LARGEUR, HAUTEUR));
     doc.addPage(page);
     pages.add(page);
     cs = ouvrir(page, false);
@@ -228,7 +243,7 @@ public class Pdf implements AutoCloseable {
       cs.beginText();
       cs.setFont(style.police().fonte, style.taille());
       cs.setNonStrokingColor(couleur(style.couleur()));
-      cs.newLineAtOffset(x, HAUTEUR - y - style.police().ascendante * style.taille());
+      cs.newLineAtOffset(x, hauteurPage() - y - style.police().ascendante * style.taille());
       cs.showText(texte);
       cs.endText();
     } catch (IOException e) {
@@ -236,10 +251,25 @@ public class Pdf implements AutoCloseable {
     }
   }
 
+  /** Hauteur d'une ligne de texte dans ce style (celle qu'utilise {@link #bloc}). */
+  public static float hauteurLigne(Style style) {
+    return style.police().interligne * style.taille() - 0.5f;
+  }
+
   /** Texte sur plusieurs lignes dans une boîte de hauteur fixe ; la dernière ligne visible finit par « … ». */
   public void bloc(String s, float x, float y, float largeurMax, float hauteurMax, Style style) {
-    float hLigne = style.police().interligne * style.taille() - 0.5f;
+    float hLigne = hauteurLigne(style);
     int maxLignes = Math.max(1, (int) Math.floor((hauteurMax + 0.5f) / hLigne));
+    List<String> lignes = couper(s, style, largeurMax);
+    for (int i = 0; i < Math.min(lignes.size(), maxLignes); i++) {
+      String l = lignes.get(i);
+      if (i == maxLignes - 1 && lignes.size() > maxLignes) l = l + " …";
+      ligne(l, x, y + i * hLigne, largeurMax, style);
+    }
+  }
+
+  /** Le texte découpé en lignes qui tiennent dans la largeur (retours à la ligne gardés). */
+  public static List<String> couper(String s, Style style, float largeurMax) {
     List<String> lignes = new ArrayList<>();
     for (String paragraphe : t(s).split("\n")) {
       StringBuilder courante = new StringBuilder();
@@ -256,11 +286,7 @@ public class Pdf implements AutoCloseable {
       }
       lignes.add(courante.toString());
     }
-    for (int i = 0; i < Math.min(lignes.size(), maxLignes); i++) {
-      String l = lignes.get(i);
-      if (i == maxLignes - 1 && lignes.size() > maxLignes) l = l + " …";
-      ligne(l, x, y + i * hLigne, largeurMax, style);
-    }
+    return lignes;
   }
 
   // ---------- Formes ----------
@@ -274,7 +300,7 @@ public class Pdf implements AutoCloseable {
     try {
       cs.saveGraphicsState();
       cs.setLineWidth(0.5f);
-      cs.addRect(x, HAUTEUR - y - h, l, h);
+      cs.addRect(x, hauteurPage() - y - h, l, h);
       cs.setStrokingColor(couleur(trait));
       if (fond != null) {
         cs.setNonStrokingColor(couleur(fond));
@@ -297,7 +323,7 @@ public class Pdf implements AutoCloseable {
   public void remplir(float x, float y, float l, float h, String fond) {
     try {
       cs.setNonStrokingColor(couleur(fond));
-      cs.addRect(x, HAUTEUR - y - h, l, h);
+      cs.addRect(x, hauteurPage() - y - h, l, h);
       cs.fill();
     } catch (IOException e) {
       throw new UncheckedIOException(e);
@@ -308,8 +334,8 @@ public class Pdf implements AutoCloseable {
   public void polygone(float[] xs, float[] ys, String fond) {
     try {
       cs.setNonStrokingColor(couleur(fond));
-      cs.moveTo(xs[0], HAUTEUR - ys[0]);
-      for (int i = 1; i < xs.length; i++) cs.lineTo(xs[i], HAUTEUR - ys[i]);
+      cs.moveTo(xs[0], hauteurPage() - ys[0]);
+      for (int i = 1; i < xs.length; i++) cs.lineTo(xs[i], hauteurPage() - ys[i]);
       cs.closePath();
       cs.fill();
     } catch (IOException e) {
@@ -322,8 +348,8 @@ public class Pdf implements AutoCloseable {
       cs.saveGraphicsState();
       cs.setLineWidth(epaisseur);
       cs.setStrokingColor(couleur(couleur));
-      cs.moveTo(x1, HAUTEUR - y1);
-      cs.lineTo(x2, HAUTEUR - y2);
+      cs.moveTo(x1, hauteurPage() - y1);
+      cs.lineTo(x2, hauteurPage() - y2);
       cs.stroke();
       cs.restoreGraphicsState();
     } catch (IOException e) {
@@ -334,8 +360,8 @@ public class Pdf implements AutoCloseable {
   private void cheminArrondi(float x, float y, float l, float h, float r) {
     try {
       float c = r * (1 - 0.5522847498f);
-      float bas = HAUTEUR - y - h;
-      float haut = HAUTEUR - y;
+      float bas = hauteurPage() - y - h;
+      float haut = hauteurPage() - y;
       cs.moveTo(x + r, haut);
       cs.lineTo(x + l - r, haut);
       cs.curveTo(x + l - c, haut, x + l, haut - c, x + l, haut - r);
@@ -378,7 +404,7 @@ public class Pdf implements AutoCloseable {
   public void decouper(float x, float y, float l, float h) {
     try {
       cs.saveGraphicsState();
-      cs.addRect(x, HAUTEUR - y - h, l, h);
+      cs.addRect(x, hauteurPage() - y - h, l, h);
       cs.clip();
     } catch (IOException e) {
       throw new UncheckedIOException(e);
@@ -406,7 +432,7 @@ public class Pdf implements AutoCloseable {
 
   /** Image étirée dans le rectangle. */
   public void image(byte[] contenu, float x, float y, float l, float h) throws IOException {
-    cs.drawImage(image(contenu), x, HAUTEUR - y - h, l, h);
+    cs.drawImage(image(contenu), x, hauteurPage() - y - h, l, h);
   }
 
   /** Image entière, réduite pour tenir dans la boîte et centrée. */
@@ -415,7 +441,7 @@ public class Pdf implements AutoCloseable {
     float echelle = Math.min(l / img.getWidth(), h / img.getHeight());
     float il = img.getWidth() * echelle;
     float ih = img.getHeight() * echelle;
-    cs.drawImage(img, x + (l - il) / 2, HAUTEUR - y - (h - ih) / 2 - ih, il, ih);
+    cs.drawImage(img, x + (l - il) / 2, hauteurPage() - y - (h - ih) / 2 - ih, il, ih);
   }
 
   /** Image qui couvre toute la boîte (rognée), centrée ; à utiliser dans une découpe. */
@@ -424,7 +450,7 @@ public class Pdf implements AutoCloseable {
     float echelle = Math.max(l / img.getWidth(), h / img.getHeight());
     float il = img.getWidth() * echelle;
     float ih = img.getHeight() * echelle;
-    cs.drawImage(img, x + (l - il) / 2, HAUTEUR - y - (h - ih) / 2 - ih, il, ih);
+    cs.drawImage(img, x + (l - il) / 2, hauteurPage() - y - (h - ih) / 2 - ih, il, ih);
   }
 
   /** Transparence des dessins suivants (1 = opaque). */

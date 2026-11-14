@@ -40,7 +40,7 @@ public final class EnteteOfficiel {
   public static float dessiner(Pdf pdf, Etablissement e, float y) {
     float marge = 24;
     float col = 220;
-    float droite = Pdf.LARGEUR - marge - col;
+    float droite = pdf.largeurPage() - marge - col;
     List<LigneEntete> lignes = new ArrayList<>();
     lignes.add(new LigneEntete("RÉPUBLIQUE DU CAMEROUN", "REPUBLIC OF CAMEROON", Police.GRASSE, 8, 9.5f));
     lignes.add(new LigneEntete("Paix – Travail – Patrie", "Peace – Work – Fatherland", Police.ITALIQUE, 6.5f, 11.5f));
@@ -73,13 +73,13 @@ public final class EnteteOfficiel {
       yy += l.espace();
     }
     // Sceau de l'établissement au centre, puis son code et son nom.
-    float cx = Pdf.LARGEUR / 2;
+    float cx = pdf.largeurPage() / 2;
     try {
       pdf.image(Pdf.logo(), cx - 27, y - 2, 54, 54);
     } catch (IOException ex) {
       throw new UncheckedIOException(ex);
     }
-    float centre = Pdf.LARGEUR - 2 * (marge + col) - 6;
+    float centre = Math.min(Pdf.LARGEUR - 2 * (marge + col) - 6, pdf.largeurPage() - 2 * (marge + col) - 6);
     pdf.ligne(e.getCode(), cx - centre / 2, y + 54, centre, Style.de(5.5f).couleur(Couleurs.GRIS).centre());
     pdf.ligneAjustee(titreFr(e), cx - centre / 2, y + 62, centre, Style.de(8).gras().couleur(Couleurs.ACCENT).centre());
     pdf.ligneAjustee(titreEn(e), cx - centre / 2, y + 71.5f, centre, Style.de(6).gras().centre());
@@ -136,9 +136,9 @@ public final class EnteteOfficiel {
     int total = pdf.nombrePages();
     for (int i = 0; i < total; i++) {
       pdf.reprendrePage(i);
-      float y = Pdf.HAUTEUR - 14;
+      float y = pdf.hauteurPage() - 14;
       pdf.ligne(texte, 24, y, 400, Style.de(5.5f).couleur(Couleurs.GRIS));
-      pdf.ligne("Page " + (i + 1) + " / " + total, Pdf.LARGEUR - 124, y, 100, Style.de(5.5f).couleur(Couleurs.GRIS).droite());
+      pdf.ligne("Page " + (i + 1) + " / " + total, pdf.largeurPage() - 124, y, 100, Style.de(5.5f).couleur(Couleurs.GRIS).droite());
     }
   }
 }
