@@ -119,6 +119,23 @@ public class AbsenceController {
     return bilan.bilan(classeId, cm.cetic.mezesse.service.calcul.Periode.lire(periode));
   }
 
+  /** Le bilan affiché (classe et période) : « format » = pdf (à imprimer) ou xlsx. */
+  @GetMapping("/absences/bilan/export")
+  @Direction
+  public ResponseEntity<byte[]> exporterBilan(
+      @RequestParam String classeId, @RequestParam(defaultValue = "A") String periode, @RequestParam(defaultValue = "pdf") String format) {
+    var p = cm.cetic.mezesse.service.calcul.Periode.lire(periode);
+    var b = bilan.bilan(classeId, p);
+    String classe = classes.findById(classeId).map(c -> c.getNom()).orElse("");
+    String titre = "Bilan des absences · " + classe + " · " + p.libelle();
+    String nom = "bilan-absences-" + java.text.Normalizer.normalize(classe + "-" + periode, java.text.Normalizer.Form.NFD)
+        .replaceAll("\\p{M}", "").replaceAll("[^A-Za-z0-9]+", "-").replaceAll("(^-|-$)", "").toLowerCase(java.util.Locale.ROOT);
+    var etab = etablissement.requis();
+    return fichier(nom, format,
+        () -> cm.cetic.mezesse.document.BilanAbsencesExport.pdf(etab, titre, b),
+        () -> cm.cetic.mezesse.document.BilanAbsencesExport.excel(titre, b));
+  }
+
   /** Séances non assurées par les enseignants (absents), totaux par enseignant : direction. */
   @GetMapping("/absences/enseignants")
   @Direction
