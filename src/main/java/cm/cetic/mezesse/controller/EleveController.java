@@ -137,6 +137,13 @@ public class EleveController {
     return service.changerPhoto(moi, id, photo);
   }
 
+  /** Retire la photo (erreur) ; la décision peut être désapprouvée, ce qui la remet. */
+  @org.springframework.web.bind.annotation.DeleteMapping("/{id}/photo")
+  @Direction
+  public void supprimerPhoto(@AuthenticationPrincipal UtilisateurConnecte moi, @PathVariable String id) {
+    service.supprimerPhoto(moi, id);
+  }
+
   @GetMapping("/{id}/photo")
   @Direction
   public ResponseEntity<byte[]> photo(@PathVariable String id) {

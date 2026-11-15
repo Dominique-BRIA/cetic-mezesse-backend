@@ -63,6 +63,9 @@ cetic:
   # Mot de passe donné à un compte après réinitialisation par le SG (décision du 16/10/2026).
   mot-de-passe-reinitialise: password
   dossier-photos: ${DOSSIER_PHOTOS:uploads}
+  # Nettoyage nocturne des fichiers devenus inutiles dans le stockage (anciennes photos, pièces orphelines) :
+  # à activer (true) seulement sur le serveur de production, dont la base va avec le bucket.
+  nettoyage-stockage: ${NETTOYAGE_STOCKAGE:false}
   b2:
     endpoint: ${B2_ENDPOINT:}
     key-id: ${B2_KEY_ID:}

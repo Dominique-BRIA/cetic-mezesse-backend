@@ -405,6 +405,21 @@ public class EleveService {
     return new PhotoCle(cle);
   }
 
+  /**
+   * Retire la photo d'un élève (photo erronée). Le fichier reste dans le stockage tant que la décision peut être
+   * désapprouvée, ce qui remet la photo ; le nettoyage nocturne le retire ensuite.
+   */
+  @Transactional
+  public void supprimerPhoto(UtilisateurConnecte moi, String id) {
+    Eleve e = eleves.findById(id).orElseThrow(() -> ApiException.introuvable("Élève"));
+    String avant = e.getPhotoCle();
+    if (avant == null) throw ApiException.invalide("Cet élève n'a pas de photo.");
+    e.setPhotoCle(null);
+    journal.consigner(
+        moi, DomaineDecision.SCOLARITE, "eleve.photo", "Suppression de la photo de " + e.nomComplet(), "/eleves/" + id,
+        Donnees.objet("eleveId", id, "avantCle", avant, "apresCle", null));
+  }
+
   public record Photo(byte[] contenu, String type) {}
 
   public Photo photo(String id) {

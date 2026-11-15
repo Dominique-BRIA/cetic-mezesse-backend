@@ -93,6 +93,35 @@ public class StockageService {
     }
   }
 
+  /** Un fichier du stockage : sa clé et sa date de dernière écriture. */
+  public record Objet(String cle, java.time.Instant modifieLe) {}
+
+  /** Les fichiers dont la clé commence par ce préfixe (« eleves/ », « justificatifs/ »). */
+  public java.util.List<Objet> lister(String prefixe) {
+    java.util.List<Objet> l = new java.util.ArrayList<>();
+    if (client != null) {
+      client.listObjectsV2Paginator(b -> b.bucket(bucket).prefix(prefixe)).contents().forEach(o -> l.add(new Objet(o.key(), o.lastModified())));
+      return l;
+    }
+    Path dossier = cheminLocal(prefixe);
+    if (!Files.isDirectory(dossier)) return l;
+    try (var fichiers = Files.walk(dossier)) {
+      fichiers
+          .filter(Files::isRegularFile)
+          .forEach(
+              f -> {
+                try {
+                  l.add(new Objet(dossierLocal.relativize(f).toString().replace('\\', '/'), Files.getLastModifiedTime(f).toInstant()));
+                } catch (IOException e) {
+                  log.warn("Fichier illisible : {}", f);
+                }
+              });
+    } catch (IOException e) {
+      throw new IllegalStateException("Lecture du dossier de stockage impossible", e);
+    }
+    return l;
+  }
+
   private Path cheminLocal(String cle) {
     Path fichier = dossierLocal.resolve(cle).normalize();
     if (!fichier.startsWith(dossierLocal)) throw new IllegalArgumentException("Clé de fichier invalide");

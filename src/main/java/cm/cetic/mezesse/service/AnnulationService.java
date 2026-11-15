@@ -565,7 +565,9 @@ public class AnnulationService {
     Eleve e = eleves.findById(texte(a.get("eleveId"))).orElseThrow(() -> ApiException.conflit("Cet élève n'existe plus."));
     if (!Objects.equals(e.getPhotoCle(), texte(a.get("apresCle")))) return new Resultat("La photo a été changée depuis : rien à défaire.");
     e.setPhotoCle(texte(a.get("avantCle")));
-    return new Resultat("La photo précédente de " + e.nomComplet() + " a été remise.", List.of(texte(a.get("apresCle"))));
+    // Photo supprimée (pas de photo après) : rien à retirer du stockage.
+    String apres = texte(a.get("apresCle"));
+    return new Resultat("La photo précédente de " + e.nomComplet() + " a été remise.", apres == null ? List.of() : List.of(apres));
   }
 
   @SuppressWarnings("unchecked")
