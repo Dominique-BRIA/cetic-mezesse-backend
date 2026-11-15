@@ -34,7 +34,7 @@ public class LimiteConnexionFilter extends OncePerRequestFilter {
     if (!"POST".equals(req.getMethod())) return 0;
     return switch (req.getRequestURI()) {
       case "/api/auth/connexion", "/api/console/auth/connexion" -> LIMITE;
-      case "/api/appareils/plantages" -> LIMITE_PLANTAGES;
+      case "/api/appareils/plantages", "/api/appareils/oublier", "/api/push/web/oublier" -> LIMITE_PLANTAGES;
       default -> 0;
     };
   }

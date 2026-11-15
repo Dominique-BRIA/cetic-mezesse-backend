@@ -85,7 +85,7 @@ public class SecurityConfig {
             a ->
                 a.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/sante").permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/auth/connexion", "/api/console/auth/connexion", "/api/appareils/plantages").permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/auth/connexion", "/api/console/auth/connexion", "/api/appareils/plantages", "/api/appareils/oublier", "/api/push/web/oublier").permitAll()
                     .requestMatchers(HttpMethod.GET, "/api/mises-a-jour/politique").permitAll()
                     .requestMatchers("/error").permitAll()
                     .requestMatchers("/api/console/**").hasRole(Role.SUPER_ADMIN.name())

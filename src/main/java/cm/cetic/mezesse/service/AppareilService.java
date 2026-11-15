@@ -60,6 +60,17 @@ public class AppareilService {
         .ifPresent(a -> a.setUtilisateur(null));
   }
 
+  /**
+   * Sans session : le téléphone qui présente l'identifiant d'installation et le jeton de notification enregistrés
+   * n'est plus rattaché à aucun compte. Un jeton qui ne correspond pas ne change rien (aucun indice renvoyé).
+   */
+  @Transactional
+  public void oublier(String installationId, String jetonPush) {
+    appareils.findByInstallationId(installationId)
+        .filter(a -> a.getJetonPush() != null && java.security.MessageDigest.isEqual(a.getJetonPush().getBytes(), jetonPush.strip().getBytes()))
+        .ifPresent(a -> a.setUtilisateur(null));
+  }
+
   /** Un plantage revenu après avoir été marqué résolu redevient ouvert. */
   @Transactional
   public void plantage(Rapport d) {

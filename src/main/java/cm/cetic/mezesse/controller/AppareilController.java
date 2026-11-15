@@ -41,6 +41,13 @@ public class AppareilController {
     service.detacher(moi, d.installationId());
   }
 
+  /** Publique et limitée par adresse : session expirée ou déconnexion hors réseau, le téléphone se détache seul. */
+  @PostMapping("/appareils/oublier")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void oublier(@Valid @RequestBody cm.cetic.mezesse.dto.AppareilDto.Oubli d) {
+    service.oublier(d.installationId(), d.jetonPush());
+  }
+
   /** Publique et limitée par adresse : l'application peut se fermer avant toute connexion. */
   @PostMapping("/appareils/plantages")
   @ResponseStatus(HttpStatus.NO_CONTENT)

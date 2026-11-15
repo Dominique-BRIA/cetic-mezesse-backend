@@ -52,4 +52,11 @@ public class PushController {
   public void retirer(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody Abonnement d) {
     jetons.retirer(d.jeton(), moi.id());
   }
+
+  /** Publique et limitée par adresse : session expirée ou déconnexion hors réseau ; le jeton, que seul ce navigateur connaît, suffit. */
+  @PostMapping("/oublier")
+  @ResponseStatus(HttpStatus.NO_CONTENT)
+  public void oublier(@Valid @RequestBody Abonnement d) {
+    jetons.retirerJeton(d.jeton().strip());
+  }
 }

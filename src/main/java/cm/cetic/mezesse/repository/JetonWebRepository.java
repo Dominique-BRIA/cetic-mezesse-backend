@@ -27,4 +27,10 @@ public interface JetonWebRepository extends JpaRepository<JetonWeb, String> {
   @Modifying
   @Query("delete from JetonWeb j where j.jeton = :jeton and j.utilisateur.id = :utilisateurId")
   int retirer(String jeton, String utilisateurId);
+
+  /** Sans session : qui détient le jeton est ce navigateur ; il ne reçoit plus rien. */
+  @Modifying
+  @Transactional
+  @Query("delete from JetonWeb j where j.jeton = :jeton")
+  int retirerJeton(String jeton);
 }

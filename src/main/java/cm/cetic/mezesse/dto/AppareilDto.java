@@ -25,6 +25,14 @@ public final class AppareilDto {
   /** Déconnexion : le téléphone ne reçoit plus les notifications du compte. */
   public record Detachement(@NotBlank(message = "obligatoire") @Size(max = 64, message = "64 caractères au plus") String installationId) {}
 
+  /**
+   * Oubli sans session (session expirée, déconnexion hors réseau) : le téléphone prouve qu'il est bien lui en donnant
+   * son jeton de notification, qu'il est seul à connaître.
+   */
+  public record Oubli(
+      @NotBlank(message = "obligatoire") @Size(max = 64, message = "64 caractères au plus") String installationId,
+      @NotBlank(message = "obligatoire") @Size(max = 4096, message = "4096 caractères au plus") String jetonPush) {}
+
   /** Plantage : route publique, l'application peut se fermer avant toute connexion. Les textes trop longs sont coupés. */
   public record Rapport(
       @NotBlank(message = "obligatoire") @Size(max = 64, message = "64 caractères au plus") String installationId,
