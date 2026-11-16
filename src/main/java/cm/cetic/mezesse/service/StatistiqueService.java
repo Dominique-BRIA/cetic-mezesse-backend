@@ -153,9 +153,13 @@ public class StatistiqueService {
     for (ResultatEleve r : d.resultats().eleves()) {
       if (r.moyenne() == null) continue;
       Eleve e = d.inscription(r.inscriptionId()).getEleve();
-      moyennes.add(new EleveMoyenne(r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), r.moyenne(), r.rang()));
+      moyennes.add(new EleveMoyenne(r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), r.moyenne(), r.rangBulletin()));
     }
-    moyennes.sort(Comparator.comparingDouble(EleveMoyenne::moyenne).reversed());
+    // Ordre du classement : rang, l'élève désigné de chaque groupe d'ex æquo d'abord, puis le nom.
+    moyennes.sort(
+        Comparator.comparingInt((EleveMoyenne m) -> m.rang() == null ? 999 : m.rang().rang())
+            .thenComparing((EleveMoyenne m) -> m.rang() != null && m.rang().exAequo())
+            .thenComparing(EleveMoyenne::nom, ORDRE_ALPHABETIQUE));
 
     List<Evolution> evolution = new ArrayList<>();
     for (Periode s : List.of(Periode.S1, Periode.S2, Periode.S3, Periode.S4, Periode.S5, Periode.S6, Periode.T1, Periode.T2, Periode.T3)) {
@@ -187,18 +191,40 @@ public class StatistiqueService {
     List<DonneesClasse> donnees = lesClasses.stream().map(c -> resultats.resultatsClasse(c.getId(), p, b)).toList();
 
     List<EleveEtablissement> eleves = new ArrayList<>();
+    // Départage des ex æquo de l'établissement : moyenne des groupes (par nom), absences non justifiées, nom.
+    Map<String, Map<String, Double>> groupesParEleve = new java.util.HashMap<>();
+    Map<String, Integer> minutesParEleve = new java.util.HashMap<>();
+    List<cm.cetic.mezesse.service.calcul.Resultats.Groupe> tousGroupes = new ArrayList<>();
     for (DonneesClasse d : donnees) {
+      Map<String, String> nomsGroupes = new java.util.HashMap<>();
+      for (var g : d.resultats().groupes()) {
+        nomsGroupes.put(g.id(), g.nom().strip().toLowerCase(Locale.ROOT));
+        if (tousGroupes.stream().noneMatch(x -> x.nom().equalsIgnoreCase(g.nom()))) tousGroupes.add(g);
+      }
       for (ResultatEleve r : d.resultats().eleves()) {
+        groupesParEleve.put(r.inscriptionId(), CalculResultats.moyennesParNom(r.groupes(), nomsGroupes));
+        minutesParEleve.put(r.inscriptionId(), r.minutesNonJustifiees());
         Inscription i = d.inscription(r.inscriptionId());
         Eleve e = i.getEleve();
         eleves.add(
             new EleveEtablissement(
                 i.getId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), new Ref(d.classe().getId(), d.classe().getNom()),
-                r.moyenne(), r.rang(), null));
+                r.moyenne(), r.rangBulletin(), null));
       }
     }
     List<EleveEtablissement> avecMoyenne = eleves.stream().filter(e -> e.moyenne() != null).toList();
     Map<EleveEtablissement, Rang> rangs = CalculResultats.classer(avecMoyenne, EleveEtablissement::moyenne);
+    // Comme sur les bulletins : dans chaque groupe d'ex æquo, l'élève désigné par le réglage porte le rang sans « ex ».
+    var criteres = resultats.regles().criteres();
+    if (criteres == null || criteres.isEmpty()) criteres = CalculResultats.criteresParDefaut(tousGroupes);
+    java.util.Comparator<EleveEtablissement> ordre =
+        CalculResultats.departage(
+            criteres,
+            e -> groupesParEleve.getOrDefault(e.inscriptionId(), Map.of()),
+            e -> minutesParEleve.getOrDefault(e.inscriptionId(), 0),
+            e -> e.nom() + " " + e.prenoms(),
+            e -> e.inscriptionId() + "|" + p.name());
+    for (EleveEtablissement e : CalculResultats.designes(avecMoyenne, rangs, ordre)) rangs.put(e, new Rang(rangs.get(e).rang(), false));
     List<EleveEtablissement> classement =
         new ArrayList<>(
             avecMoyenne.stream()
@@ -210,6 +236,7 @@ public class StatistiqueService {
                 .toList());
     classement.sort(
         Comparator.comparingInt((EleveEtablissement e) -> e.rang().rang())
+            .thenComparing((EleveEtablissement e) -> e.rang().exAequo())
             .thenComparing(Comparator.comparingDouble((EleveEtablissement e) -> e.moyenne()).reversed())
             .thenComparing(EleveEtablissement::nom, ORDRE_ALPHABETIQUE));
 
