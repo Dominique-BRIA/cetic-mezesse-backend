@@ -58,6 +58,8 @@ public class DocumentService {
   /** Bulletins d'une ou plusieurs classes, ou de quelques élèves : un seul PDF, une page par élève. */
   public Fichier bulletins(Selection s) {
     Periode p = Periode.lire(s.periode());
+    // Plus de bulletin annuel séparé : celui du 3e trimestre porte le bilan de l'année et la décision.
+    if (p == Periode.A) throw ApiException.invalide("Le bulletin annuel est remplacé par celui du 3e trimestre, qui porte le bilan annuel.");
     if (s.classeIds().isEmpty() && s.inscriptionIds().isEmpty()) throw ApiException.invalide("Choisissez au moins une classe ou un élève.");
     Etablissement etab = etablissement.requis();
     Baremes baremes = resultats.baremes();
@@ -90,11 +92,15 @@ public class DocumentService {
         }
         // Le 3e trimestre est le bulletin de fin d'année : il porte aussi le bilan annuel et la décision.
         var annuel = p == Periode.T3 ? resultats.resultatsClasse(c.getId(), Periode.A, baremes).resultats() : null;
+        List<Rappel> trimestres = new ArrayList<>();
+        if (p == Periode.T3) {
+          for (Periode t : Periode.TRIMESTRES) trimestres.add(new Rappel(t, t == p ? donnees.resultats() : resultats.resultatsClasse(c.getId(), t, baremes).resultats()));
+        }
         BulletinPdf.Contexte ctx =
             new BulletinPdf.Contexte(
                 etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue(),
                 bilanAbsences.aDesAppels(c.getId(), p) ? bilanAbsences.discipline(c.getId(), p) : Map.of(), annuel,
-                etab.getMoyenneDeliberation() == null ? null : etab.getMoyenneDeliberation().doubleValue());
+                etab.getMoyenneDeliberation() == null ? null : etab.getMoyenneDeliberation().doubleValue(), trimestres);
         for (Inscription i : aImprimer) {
           pdf.nouvellePage();
           BulletinPdf.dessiner(pdf, ctx, i.getId());

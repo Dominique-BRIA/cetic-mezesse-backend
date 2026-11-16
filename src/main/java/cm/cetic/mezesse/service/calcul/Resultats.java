@@ -44,6 +44,7 @@ public final class Resultats {
    *
    * @param classe faux si l'élève n'est pas classé (trop peu de matières composées) : pas de moyenne ni de rang
    * @param minutesNonJustifiees absences non justifiées de la période (départage de la première place, tableau d'honneur)
+   * @param nonClasse la période a des notes dans la classe mais l'élève n'est pas classé (même sans aucune note) : « NC »
    */
   public record ResultatEleve(
       String inscriptionId,
@@ -55,13 +56,8 @@ public final class Resultats {
       Rang rang,
       String cote,
       boolean classe,
-      int minutesNonJustifiees) {
-
-    /** Non classé alors qu'il a des notes : à afficher « NC » plutôt qu'un rang vide. */
-    public boolean nonClasse() {
-      return !classe && matieres.stream().anyMatch(l -> l.note() != null);
-    }
-  }
+      int minutesNonJustifiees,
+      boolean nonClasse) {}
 
   /** Critère de départage de la première place : moyenne d'un groupe de matières (par son nom), discipline, ordre alphabétique. */
   public record Critere(String type, String groupe) {

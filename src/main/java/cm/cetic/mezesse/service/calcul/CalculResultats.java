@@ -395,7 +395,8 @@ public final class CalculResultats {
               ecartTypeDe(valeurs), valeurs.size()));
     }
 
-    // Groupes et moyenne générale de chaque élève
+    // Groupes et moyenne générale de chaque élève ; la période est évaluée si une matière y a des notes.
+    boolean periodeEvaluee = stats.stream().anyMatch(StatMatiere::evaluee);
     List<ResultatEleve> eleves = new ArrayList<>();
     for (String ins : e.inscriptions()) {
       Map<String, LigneMatiere> parMatiere = lignes.get(ins);
@@ -418,7 +419,8 @@ public final class CalculResultats {
       eleves.add(
           new ResultatEleve(
               ins, matieres.stream().map(m -> parMatiere.get(m.id())).toList(), lignesGroupes, totalCoef, totalPoints, moyenne, null,
-              mention(moyenne, e.cotes()), classe && moyenne != null, e.minutesNonJustifiees().getOrDefault(ins, 0)));
+              mention(moyenne, e.cotes()), classe && moyenne != null, e.minutesNonJustifiees().getOrDefault(ins, 0),
+              periodeEvaluee && !(classe && moyenne != null)));
     }
 
     // Un seul premier : départage dans l'ordre réglé (par défaut, matières professionnelles, discipline, ordre alphabétique).
@@ -439,7 +441,7 @@ public final class CalculResultats {
                 r ->
                     new ResultatEleve(
                         r.inscriptionId(), r.matieres(), r.groupes(), r.totalCoef(), r.totalPoints(), r.moyenne(), rangs.get(r), r.cote(), r.classe(),
-                        r.minutesNonJustifiees()))
+                        r.minutesNonJustifiees(), r.nonClasse()))
             .toList();
     // Sur l'année, la délibération compte comme une réussite.
     double seuilReussite = e.periode() == Periode.A && regles.moyenneDeliberation() != null ? Math.min(10, regles.moyenneDeliberation()) : 10;

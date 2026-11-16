@@ -53,13 +53,14 @@ public final class BulletinPdf {
       Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur,
       Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline,
       cm.cetic.mezesse.service.calcul.Resultats.ResultatsClasse annuel,
-      Double moyenneDeliberation) {
+      Double moyenneDeliberation,
+      List<Rappel> trimestres) {
 
     /** Sans bilan annuel ni délibération (séquences, trimestres 1 et 2). */
     public Contexte(
         Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur,
         Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline) {
-      this(etab, donnees, rappels, competences, photos, seuilTableauHonneur, discipline, null, null);
+      this(etab, donnees, rappels, competences, photos, seuilTableauHonneur, discipline, null, null, null);
     }
   }
 
@@ -185,7 +186,10 @@ public final class BulletinPdf {
       xs[i] = cumul;
       cumul += cols.get(i).largeur();
     }
-    float hBas = 88 + 6 + 74 + 16;
+    // Fin d'année (3e trimestre et bulletin annuel) : un cadre « Bilan annuel » en plus.
+    boolean finAnnee = p == Periode.A || ctx.annuel() != null;
+    float hBilan = finAnnee ? 62 : 0;
+    float hBas = 88 + 6 + 74 + 16 + hBilan;
     int nbLignes = resultats.matieres().size() + resultats.groupes().size();
     float hEntete = 20;
     float dispo = Pdf.HAUTEUR - y - hBas - hEntete - 6;
@@ -260,8 +264,8 @@ public final class BulletinPdf {
     rangee(pdf, xB2, lGauche, yT, "Total des points / Total", fr(r.totalPoints()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 10.6f, "Total des coef. / Coef", String.valueOf(r.totalCoef()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 21.2f, "Moyenne / Average", r.moyenne() == null ? "—" : fr(r.moyenne()) + "/20", true, 46);
-    String rang = r.rang() != null ? CalculResultats.formatRang(r.rang()) + " / " + classesAvecMoyenne : r.nonClasse() ? "Non classé / Not ranked" : "—";
-    rangee(pdf, xB2, lGauche, yT + 31.8f, "Rang / Rank", rang, true, 42);
+    String rang = r.rang() != null ? CalculResultats.formatRang(r.rang()) + " / " + classesAvecMoyenne : r.nonClasse() ? "Non classé" : "—";
+    rangee(pdf, xB2, lGauche, yT + 31.8f, "Rang / Rank", rang, true, 58);
     for (int k = 0; k < ctx.rappels().size(); k++) {
       Rappel rp = ctx.rappels().get(k);
       ResultatEleve er = rp.resultats().eleve(inscriptionId);
@@ -295,6 +299,11 @@ public final class BulletinPdf {
     rangee(pdf, xB3, l3, yT + 53, "Écart-type / Std deviation", fr(pf.ecartType()), false, 42);
     y += hb + 6;
 
+    if (finAnnee) {
+      bilanAnnuel(pdf, ctx, inscriptionId, y, p == Periode.A ? resultats : ctx.annuel(), p == Periode.A ? ctx.rappels() : ctx.trimestres());
+      y += hBilan;
+    }
+
     // ---- Signatures ----
     float hs = 72;
     float[] ls = {190, 105, 122, L - 190 - 105 - 122};
@@ -315,28 +324,70 @@ public final class BulletinPdf {
     if (cm.cetic.mezesse.service.TableauHonneurService.auTableau(r, ctx.seuilTableauHonneur(), etab.getHeuresRefusTableauHonneur())) {
       pdf.ligne("TABLEAU D'HONNEUR / HONOUR ROLL", X0 + 3, y + 22, ls[0] - 6, Style.de(8).gras().couleur("#a8801f"));
     }
-    // Fin d'année : le bulletin annuel et celui du 3e trimestre portent le bilan de l'année et la décision.
-    ResultatEleve an = p == Periode.A ? r : ctx.annuel() == null ? null : ctx.annuel().eleve(inscriptionId);
-    if (an != null) {
-      if (p != Periode.A) {
-        long classesAn = ctx.annuel().eleves().stream().filter(x -> x.moyenne() != null).count();
-        String bilan =
-            an.moyenne() == null
-                ? (an.nonClasse() ? "Non classé(e) sur l'année / Not ranked" : "—")
-                : fr(an.moyenne()) + "/20  ·  Rang " + CalculResultats.formatRang(an.rang()) + " / " + classesAn;
-        pdf.ligne("Bilan annuel / Annual results : " + bilan, X0 + 3, y + 34, ls[0] - 6, Style.de(6.3f).gras());
-      }
-      Resultats.Decision d = CalculResultats.decision(an.moyenne(), ctx.moyenneDeliberation());
-      pdf.ligne("Décision du conseil de classe / Class council decision :", X0 + 3, y + hs - 22, ls[0] - 6, Style.de(6).gras());
-      pdf.ligne(
-          d == null ? "Admis(e) en classe supérieure  /  Redouble  /  Exclu(e)" : d.fr + " / " + d.en, X0 + 3, y + hs - 12, ls[0] - 6,
-          d == null ? Style.de(6).couleur(Couleurs.GRIS) : Style.de(7).gras().couleur(d == Resultats.Decision.REDOUBLE ? "#b3261e" : "#1e764c"));
-    }
 
     // ---- Pied ----
     pdf.ligne(
         etab.getNomFr() + " · " + classe.getNom() + " · " + e.nomComplet() + " · édité le " + EnteteOfficiel.aujourdhui(), X0, Pdf.HAUTEUR - 13, L,
         Style.de(5.4f).couleur(Couleurs.GRIS));
+  }
+
+  /**
+   * Cadre « Bilan annuel » : les trois trimestres (moyenne et rang), la moyenne et le rang de l'année, le profil
+   * annuel de la classe et la décision du conseil de classe.
+   */
+  private static void bilanAnnuel(Pdf pdf, Contexte ctx, String inscriptionId, float y, ResultatsClasse annuel, List<Rappel> trimestres) {
+    float h = 56;
+    float l1 = 150;
+    float l2 = 128;
+    float l3 = 160;
+    float l4 = L - l1 - l2 - l3;
+    float x2 = X0 + l1;
+    float x3 = x2 + l2;
+    float x4 = x3 + l3;
+    pdf.cadre(X0, y, L, h);
+    pdf.cadre(X0, y, L, 12, Couleurs.ENTETE);
+    pdf.ligne("BILAN ANNUEL  /  ANNUAL RESULTS", X0 + 3, y + 3, L - 6, Style.de(7).gras().couleur(Couleurs.ACCENT).centre());
+    for (float x : new float[] {x2, x3, x4}) pdf.trait(x, y + 12, x, y + h, 0.5f, Couleurs.TRAIT);
+    float yT = y + 14;
+    ResultatEleve an = annuel == null ? null : annuel.eleve(inscriptionId);
+    long classes = annuel == null ? 0 : annuel.eleves().stream().filter(x -> x.moyenne() != null).count();
+
+    // Les trois trimestres
+    if (trimestres != null) {
+      for (int k = 0; k < trimestres.size(); k++) {
+        Rappel rp = trimestres.get(k);
+        ResultatEleve er = rp.resultats().eleve(inscriptionId);
+        String v = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rang()) + ")";
+        rangee(pdf, X0, l1, yT + k * 10.6f, libelleCourt(rp.periode())[0] + " / " + libelleCourt(rp.periode())[1], v, false, 60);
+      }
+    }
+
+    // Moyenne et rang de l'année
+    pdf.ligne("Moyenne annuelle / Annual average", x2 + 4, yT + 1, l2 - 8, Style.de(6).gras().couleur(Couleurs.GRIS));
+    String moy = an == null || an.moyenne() == null ? (an != null && an.nonClasse() ? "Non classé" : "—") : fr(an.moyenne()) + " / 20";
+    pdf.ligne(moy, x2 + 4, yT + 9, l2 - 8, Style.de(11).gras());
+    pdf.ligne("Rang annuel / Annual rank", x2 + 4, yT + 23, l2 - 8, Style.de(6).gras().couleur(Couleurs.GRIS));
+    String rang = an == null || an.rang() == null ? "—" : CalculResultats.formatRang(an.rang()) + " / " + classes;
+    pdf.ligne(rang, x2 + 4, yT + 31, l2 - 8, Style.de(11).gras());
+
+    // Profil annuel de la classe
+    ProfilClasse pf = annuel == null ? null : annuel.profil();
+    rangee(pdf, x3, l3, yT, "Moyenne de la classe / Class average", pf == null ? "—" : fr(pf.moyenneGenerale()), true, 40);
+    rangee(pdf, x3, l3, yT + 10.6f, "Min – Max", pf == null || pf.min() == null ? "—" : fr(pf.min()) + " – " + fr(pf.max()), false, 58);
+    rangee(pdf, x3, l3, yT + 21.2f, "Taux de réussite / Pass rate", pf == null ? "—" : pourcent(pf.tauxReussite()), false, 40);
+    rangee(pdf, x3, l3, yT + 31.8f, "Élèves classés / Ranked", String.valueOf(classes), false, 40);
+
+    // Décision du conseil de classe
+    Resultats.Decision d = an == null ? null : CalculResultats.decision(an.moyenne(), ctx.moyenneDeliberation());
+    pdf.ligne("Décision du conseil de classe", x4 + 4, yT + 1, l4 - 8, Style.de(6.3f).gras());
+    pdf.ligne("Class council decision", x4 + 4, yT + 8.5f, l4 - 8, Style.de(5.6f).italique().couleur(Couleurs.GRIS));
+    if (d == null) {
+      pdf.ligne("Admis(e)  /  Redouble  /  Exclu(e)", x4 + 4, yT + 22, l4 - 8, Style.de(6.5f).couleur(Couleurs.GRIS));
+    } else {
+      String couleur = d == Resultats.Decision.REDOUBLE ? "#b3261e" : "#1e764c";
+      pdf.ligneAjustee(d.fr, x4 + 4, yT + 20, l4 - 8, Style.de(8.5f).gras().couleur(couleur));
+      pdf.ligne(d.en, x4 + 4, yT + 31, l4 - 8, Style.de(6.3f).italique().couleur(couleur));
+    }
   }
 
   private static String pourcent(Double v) {
