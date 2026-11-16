@@ -2,6 +2,8 @@ package cm.cetic.mezesse.service.calcul;
 
 import static cm.cetic.mezesse.util.Nombres.arrondi;
 
+import cm.cetic.mezesse.service.calcul.Resultats.Critere;
+import cm.cetic.mezesse.service.calcul.Resultats.Decision;
 import cm.cetic.mezesse.service.calcul.Resultats.Groupe;
 import cm.cetic.mezesse.service.calcul.Resultats.LigneGroupe;
 import cm.cetic.mezesse.service.calcul.Resultats.LigneMatiere;
@@ -9,11 +11,13 @@ import cm.cetic.mezesse.service.calcul.Resultats.MatiereEntree;
 import cm.cetic.mezesse.service.calcul.Resultats.NoteEntree;
 import cm.cetic.mezesse.service.calcul.Resultats.ProfilClasse;
 import cm.cetic.mezesse.service.calcul.Resultats.Rang;
+import cm.cetic.mezesse.service.calcul.Resultats.Regles;
 import cm.cetic.mezesse.service.calcul.Resultats.ResultatEleve;
 import cm.cetic.mezesse.service.calcul.Resultats.ResultatsClasse;
 import cm.cetic.mezesse.service.calcul.Resultats.Seuil;
 import cm.cetic.mezesse.service.calcul.Resultats.StatMatiere;
 import cm.cetic.mezesse.service.calcul.Resultats.Tranche;
+import java.nio.charset.StandardCharsets;
 import java.text.Collator;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -37,9 +41,15 @@ import java.util.function.Function;
  * <ul>
  *   <li>une matière n'est « évaluée » sur une séquence que si au moins un élève de la classe y a une
  *       note ; une matière non évaluée est retirée du calcul pour tout le monde ;
- *   <li>dans une matière évaluée, l'élève sans note a 0 ;
- *   <li>trimestre = moyenne des séquences évaluées du trimestre, année = moyenne des trimestres évalués ;
- *   <li>les rangs sont calculés sur les valeurs arrondies au centième, ex æquo compris.
+ *   <li>sur une séquence, selon la part des matières évaluées que l'élève a composées : en dessous du
+ *       seuil « non classé » (1/3), il n'est pas classé ; entre ce seuil et le seuil « ignorées » (2/3),
+ *       les matières non composées valent 0 ; au-delà, elles sont ignorées (leur coefficient ne compte pas) ;
+ *   <li>trimestre : les séquences où l'élève est classé ; une matière y vaut la moyenne de ses notes (une
+ *       seule note : celle-ci) ; non classé aux deux séquences, il n'est pas classé au trimestre ;
+ *   <li>année : moyenne des trimestres où l'élève est classé ; aucun trimestre classé, pas classé ;
+ *   <li>les rangs sont calculés sur les valeurs arrondies au centième ; les ex æquo partagent leur rang,
+ *       sauf à la première place, qui revient à un seul élève (départage réglé dans les paramètres, puis
+ *       tirage au sort).
  * </ul>
  */
 public final class CalculResultats {
@@ -48,8 +58,25 @@ public final class CalculResultats {
 
   private static final Collator ORDRE_ALPHABETIQUE = Collator.getInstance(Locale.FRENCH);
 
+  /**
+   * @param minutesNonJustifiees absences non justifiées de la période, par inscription (départage, tableau d'honneur)
+   * @param noms nom complet de chaque inscription (départage par ordre alphabétique)
+   */
   public record Entrees(
-      Periode periode, List<MatiereEntree> matieres, List<String> inscriptions, List<NoteEntree> notes, List<Seuil> grades, List<Seuil> cotes) {}
+      Periode periode,
+      List<MatiereEntree> matieres,
+      List<String> inscriptions,
+      List<NoteEntree> notes,
+      List<Seuil> grades,
+      List<Seuil> cotes,
+      Regles regles,
+      Map<String, Integer> minutesNonJustifiees,
+      Map<String, String> noms) {
+
+    public Entrees(Periode periode, List<MatiereEntree> matieres, List<String> inscriptions, List<NoteEntree> notes, List<Seuil> grades, List<Seuil> cotes) {
+      this(periode, matieres, inscriptions, notes, grades, cotes, Regles.DEFAUT, Map.of(), Map.of());
+    }
+  }
 
   static Double moyenneDe(List<Double> valeurs) {
     if (valeurs.isEmpty()) return null;
@@ -98,6 +125,82 @@ public final class CalculResultats {
     return rangs;
   }
 
+  /**
+   * Rangs avec un seul premier : les ex æquo de la première place sont départagés (le premier de l'ordre
+   * « departage » est 1er, les autres partagent le 2e rang) ; les autres rangs gardent leurs ex æquo.
+   */
+  public static <T> Map<T, Rang> classer(List<T> elements, Function<T, Double> valeur, Comparator<T> departage) {
+    Map<T, Rang> rangs = classer(elements, valeur);
+    List<T> premiers = new ArrayList<>(rangs.entrySet().stream().filter(x -> x.getValue().rang() == 1).map(Map.Entry::getKey).toList());
+    if (premiers.size() < 2 || departage == null) return rangs;
+    premiers.sort(departage);
+    rangs.put(premiers.get(0), new Rang(1, false));
+    for (int i = 1; i < premiers.size(); i++) rangs.put(premiers.get(i), new Rang(2, premiers.size() > 2));
+    return rangs;
+  }
+
+  /**
+   * Ordre de départage (le meilleur d'abord) : les critères dans l'ordre réglé, puis un tirage au sort
+   * stable (le même à chaque calcul, d'après l'identifiant et la période).
+   *
+   * @param moyennesGroupes moyenne de chaque groupe de matières, par nom de groupe en minuscules
+   */
+  public static <T> Comparator<T> departage(
+      List<Critere> criteres,
+      Function<T, Map<String, Double>> moyennesGroupes,
+      Function<T, Integer> minutes,
+      Function<T, String> nom,
+      Function<T, String> cleTirage) {
+    Comparator<T> c = (a, b) -> 0;
+    for (Critere k : criteres) {
+      switch (k.type()) {
+        case Critere.GROUPE -> {
+          String g = k.groupe() == null ? "" : k.groupe().strip().toLowerCase(Locale.ROOT);
+          Function<T, Double> m = e -> moyennesGroupes.apply(e).get(g);
+          c = c.thenComparing((a, b) -> Double.compare(arrondiOuMoins(m.apply(b)), arrondiOuMoins(m.apply(a))));
+        }
+        case Critere.DISCIPLINE -> c = c.thenComparingInt(e -> Objects.requireNonNullElse(minutes.apply(e), 0));
+        case Critere.ALPHABETIQUE -> c = c.thenComparing(e -> Objects.requireNonNullElse(nom.apply(e), ""), ORDRE_ALPHABETIQUE);
+        default -> {}
+      }
+    }
+    return c.thenComparingLong(e -> tirage(cleTirage.apply(e)));
+  }
+
+  private static double arrondiOuMoins(Double v) {
+    return v == null ? -1 : arrondi(v);
+  }
+
+  /** Tirage au sort stable : un nombre tiré de la clé (toujours le même pour la même clé). */
+  static long tirage(String cle) {
+    long h = 1125899906842597L;
+    for (byte b : cle.getBytes(StandardCharsets.UTF_8)) h = 31 * h + b;
+    h ^= h >>> 33;
+    h *= 0xff51afd7ed558ccdL;
+    h ^= h >>> 33;
+    return h;
+  }
+
+  /** Critères par défaut : les groupes dont le nom contient « professionnel », la discipline, l'ordre alphabétique. */
+  public static List<Critere> criteresParDefaut(List<Groupe> groupes) {
+    List<Critere> l = new ArrayList<>();
+    for (Groupe g : groupes) {
+      if (g.nom().toLowerCase(Locale.ROOT).contains("professionnel")) l.add(new Critere(Critere.GROUPE, g.nom()));
+    }
+    l.add(new Critere(Critere.DISCIPLINE, null));
+    l.add(new Critere(Critere.ALPHABETIQUE, null));
+    return l;
+  }
+
+  /** Décision de fin d'année : 10 et plus, admis ; à partir de la moyenne de délibération, admis après délibération. */
+  public static Decision decision(Double moyenneAnnuelle, Double deliberation) {
+    if (moyenneAnnuelle == null) return null;
+    double v = arrondi(moyenneAnnuelle);
+    if (v >= 10) return Decision.ADMIS;
+    if (deliberation != null && v >= deliberation) return Decision.ADMIS_DELIBERATION;
+    return Decision.REDOUBLE;
+  }
+
   /** « 1er », « 2e », « 3e ex » ; en anglais « 1st », « 2nd », « 11th ». */
   public static String formatRang(Rang r) {
     return formatRang(r, false);
@@ -116,49 +219,143 @@ public final class CalculResultats {
     return r.rang() + suffixe + (r.exAequo() ? " ex" : "");
   }
 
-  /** Index des notes : matière → séquence → inscription → valeur. */
-  private static Map<String, Map<Integer, Map<String, Double>>> indexer(List<NoteEntree> notes, Set<String> inscriptions) {
-    Map<String, Map<Integer, Map<String, Double>>> index = new HashMap<>();
-    for (NoteEntree n : notes) {
-      if (!inscriptions.contains(n.inscriptionId())) continue;
-      index.computeIfAbsent(n.matiereId(), k -> new HashMap<>()).computeIfAbsent(n.sequence(), k -> new HashMap<>()).put(n.inscriptionId(), n.valeur());
-    }
-    return index;
+  // ---------- Notes de chaque élève ----------
+
+  /** Comment comptent les matières non composées d'un élève sur une séquence. */
+  enum Bande {
+    NON_CLASSE,
+    ZERO,
+    IGNOREES
   }
 
-  /** Note d'une séquence : null si la matière n'y est pas évaluée, 0 si l'élève n'a pas de note. */
-  private static Double noteSequence(Map<String, Map<Integer, Map<String, Double>>> index, String matiereId, int seq, String inscriptionId) {
-    Map<String, Double> parEleve = index.getOrDefault(matiereId, Map.of()).get(seq);
-    if (parEleve == null || parEleve.isEmpty()) return null;
-    return parEleve.getOrDefault(inscriptionId, 0.0);
+  /** Part des matières composées : sous le seuil « non classé », pas classé ; sous le seuil « ignorées », 0 ; sinon ignorées. */
+  static Bande bande(int composees, int evaluees, Regles r) {
+    double part = composees * 100.0 / evaluees;
+    if (part < r.seuilNonClasse()) return Bande.NON_CLASSE;
+    if (part < r.seuilIgnorees()) return Bande.ZERO;
+    return Bande.IGNOREES;
+  }
+
+  /** L'élève sur une séquence : sa bande, et la valeur de chaque matière évaluée (note, 0, ou null si ignorée). */
+  private record SequenceEleve(Bande bande, Map<String, Double> valeurs) {}
+
+  /** Une matière sur la période : sa note (null si non évaluée ou ignorée) et le détail affiché au bulletin. */
+  private record NotePeriode(Double note, List<Double> detail) {}
+
+  /** Données de calcul partagées par toutes les périodes. */
+  private static final class Contexte {
+    final Map<String, Map<Integer, Map<String, Double>>> notes = new HashMap<>(); // matière → séquence → inscription → note
+    final List<MatiereEntree> matieres;
+    final Regles regles;
+    final Map<Integer, Map<String, SequenceEleve>> sequences = new HashMap<>(); // séquence → inscription
+
+    Contexte(List<MatiereEntree> matieres, List<NoteEntree> lesNotes, Set<String> inscrits, Regles regles) {
+      this.matieres = matieres;
+      this.regles = regles;
+      for (NoteEntree n : lesNotes) {
+        if (!inscrits.contains(n.inscriptionId())) continue;
+        notes.computeIfAbsent(n.matiereId(), k -> new HashMap<>()).computeIfAbsent(n.sequence(), k -> new HashMap<>()).put(n.inscriptionId(), n.valeur());
+      }
+    }
+
+    Double brute(String matiereId, int seq, String ins) {
+      return notes.getOrDefault(matiereId, Map.of()).getOrDefault(seq, Map.of()).get(ins);
+    }
+
+    List<String> evaluees(int seq) {
+      return matieres.stream().map(MatiereEntree::id).filter(m -> !notes.getOrDefault(m, Map.of()).getOrDefault(seq, Map.of()).isEmpty()).toList();
+    }
+
+    /** null si la séquence n'est pas évaluée (aucune note dans la classe). */
+    SequenceEleve sequence(int seq, String ins) {
+      return sequences.computeIfAbsent(seq, k -> new HashMap<>()).computeIfAbsent(ins, k -> calculerSequence(seq, ins));
+    }
+
+    private SequenceEleve calculerSequence(int seq, String ins) {
+      List<String> evaluees = evaluees(seq);
+      if (evaluees.isEmpty()) return null;
+      int composees = (int) evaluees.stream().filter(m -> brute(m, seq, ins) != null).count();
+      Bande b = bande(composees, evaluees.size(), regles);
+      Map<String, Double> valeurs = new HashMap<>();
+      for (String m : evaluees) {
+        Double n = brute(m, seq, ins);
+        valeurs.put(m, n != null ? n : b == Bande.ZERO ? 0.0 : null);
+      }
+      return new SequenceEleve(b, valeurs);
+    }
+
+    boolean classeSequence(int seq, String ins) {
+      SequenceEleve s = sequence(seq, ins);
+      return s != null && s.bande() != Bande.NON_CLASSE;
+    }
+
+    /** Classé sur la période : séquence classée, au moins une séquence classée du trimestre, au moins un trimestre classé. */
+    boolean classe(Periode p, String ins) {
+      if (p.estSequence()) return classeSequence(p.numero(), ins);
+      if (p.estTrimestre()) return p.sequences().stream().anyMatch(s -> classeSequence(s, ins));
+      return Periode.TRIMESTRES.stream().anyMatch(t -> classe(t, ins));
+    }
+
+    NotePeriode note(MatiereEntree m, Periode p, String ins) {
+      if (p.estSequence()) {
+        SequenceEleve s = sequence(p.numero(), ins);
+        Double v = s == null ? null : s.valeurs().get(m.id());
+        // Non classé : seules ses notes réelles s'affichent.
+        if (s != null && s.bande() == Bande.NON_CLASSE) v = brute(m.id(), p.numero(), ins);
+        return new NotePeriode(v, List.of());
+      }
+      if (p.estTrimestre()) {
+        List<Double> detail = new ArrayList<>();
+        for (int seq : p.sequences()) detail.add(note(m, Periode.valueOf("S" + seq), ins).note());
+        List<Integer> classees = p.sequences().stream().filter(seq -> classeSequence(seq, ins)).toList();
+        if (classees.isEmpty()) return new NotePeriode(moyenneNonNulle(detail), detail);
+        List<Double> brutes = classees.stream().map(seq -> brute(m.id(), seq, ins)).filter(Objects::nonNull).toList();
+        if (!brutes.isEmpty()) return new NotePeriode(moyenneDe(brutes), detail);
+        // Jamais composée : 0 si une séquence classée la compte à 0, sinon ignorée.
+        boolean zero = classees.stream().map(seq -> sequence(seq, ins)).anyMatch(s -> s.bande() == Bande.ZERO && s.valeurs().containsKey(m.id()));
+        return new NotePeriode(zero ? 0.0 : null, detail);
+      }
+      List<Double> detail = new ArrayList<>();
+      for (Periode t : Periode.TRIMESTRES) detail.add(note(m, t, ins).note());
+      List<Double> classees = new ArrayList<>();
+      for (int i = 0; i < Periode.TRIMESTRES.size(); i++) {
+        if (classe(Periode.TRIMESTRES.get(i), ins) && detail.get(i) != null) classees.add(detail.get(i));
+      }
+      if (!classe(p, ins)) return new NotePeriode(moyenneNonNulle(detail), detail);
+      return new NotePeriode(moyenneDe(classees), detail);
+    }
+
+    /** Moyenne de la période : pondérée par les coefficients ; sur l'année, moyenne des trimestres classés. */
+    Double moyenne(Periode p, String ins) {
+      if (!classe(p, ins)) return null;
+      if (p == Periode.A) {
+        return moyenneDe(Periode.TRIMESTRES.stream().filter(t -> classe(t, ins)).map(t -> moyenne(t, ins)).filter(Objects::nonNull).toList());
+      }
+      int coef = 0;
+      double total = 0;
+      for (MatiereEntree m : matieres) {
+        Double n = note(m, p, ins).note();
+        if (n == null) continue;
+        coef += m.coefficient();
+        total += n * m.coefficient();
+      }
+      return coef > 0 ? total / coef : null;
+    }
   }
 
   private static Double moyenneNonNulle(List<Double> valeurs) {
     return moyenneDe(valeurs.stream().filter(Objects::nonNull).toList());
   }
 
-  private record NotePeriode(Double note, List<Double> detail) {}
-
-  /** Note de l'élève dans une matière sur la période, avec le détail affiché au bulletin. */
-  private static NotePeriode notePeriode(Map<String, Map<Integer, Map<String, Double>>> index, String matiereId, Periode periode, String inscriptionId) {
-    if (periode.estSequence()) return new NotePeriode(noteSequence(index, matiereId, periode.numero(), inscriptionId), List.of());
-    List<Double> detail = new ArrayList<>();
-    if (periode.estTrimestre()) {
-      for (int s : periode.sequences()) detail.add(noteSequence(index, matiereId, s, inscriptionId));
-    } else {
-      for (Periode t : Periode.TRIMESTRES) detail.add(notePeriode(index, matiereId, t, inscriptionId).note());
-    }
-    return new NotePeriode(moyenneNonNulle(detail), detail);
-  }
-
   public static ResultatsClasse calculer(Entrees e) {
     Set<String> inscrits = new HashSet<>(e.inscriptions());
-    var index = indexer(e.notes(), inscrits);
     List<MatiereEntree> matieres = new ArrayList<>(e.matieres());
     matieres.sort(
         Comparator.comparingInt((MatiereEntree m) -> m.groupe().ordre())
             .thenComparingInt(MatiereEntree::ordre)
             .thenComparing(MatiereEntree::nom, ORDRE_ALPHABETIQUE));
+    Regles regles = e.regles() == null ? Regles.DEFAUT : e.regles();
+    Contexte ctx = new Contexte(matieres, e.notes(), inscrits, regles);
 
     Map<String, Groupe> groupesVus = new LinkedHashMap<>();
     for (MatiereEntree m : matieres) groupesVus.putIfAbsent(m.groupe().id(), m.groupe());
@@ -170,7 +367,7 @@ public final class CalculResultats {
     for (String ins : e.inscriptions()) {
       Map<String, LigneMatiere> parMatiere = new LinkedHashMap<>();
       for (MatiereEntree m : matieres) {
-        NotePeriode np = notePeriode(index, m.id(), e.periode(), ins);
+        NotePeriode np = ctx.note(m, e.periode(), ins);
         parMatiere.put(
             m.id(),
             new LigneMatiere(m.id(), np.note(), np.detail(), np.note() == null ? null : np.note() * m.coefficient(), null, mention(np.note(), e.grades())));
@@ -216,24 +413,58 @@ public final class CalculResultats {
       }
       int totalCoef = lignesGroupes.stream().mapToInt(LigneGroupe::coefficient).sum();
       double totalPoints = lignesGroupes.stream().mapToDouble(LigneGroupe::total).sum();
-      Double moyenne = totalCoef > 0 ? totalPoints / totalCoef : null;
+      boolean classe = ctx.classe(e.periode(), ins);
+      Double moyenne = ctx.moyenne(e.periode(), ins);
       eleves.add(
           new ResultatEleve(
               ins, matieres.stream().map(m -> parMatiere.get(m.id())).toList(), lignesGroupes, totalCoef, totalPoints, moyenne, null,
-              mention(moyenne, e.cotes())));
+              mention(moyenne, e.cotes()), classe && moyenne != null, e.minutesNonJustifiees().getOrDefault(ins, 0)));
     }
-    Map<ResultatEleve, Rang> rangs = classer(eleves, ResultatEleve::moyenne);
+
+    // Un seul premier : départage dans l'ordre réglé (par défaut, matières professionnelles, discipline, ordre alphabétique).
+    List<Critere> criteres = regles.criteres() == null || regles.criteres().isEmpty() ? criteresParDefaut(groupes) : regles.criteres();
+    Map<String, String> nomsGroupes = new HashMap<>();
+    for (Groupe g : groupes) nomsGroupes.put(g.id(), g.nom().strip().toLowerCase(Locale.ROOT));
+    Comparator<ResultatEleve> ordre =
+        departage(
+            criteres,
+            r -> moyennesParNom(r.groupes(), nomsGroupes),
+            ResultatEleve::minutesNonJustifiees,
+            r -> e.noms().get(r.inscriptionId()),
+            r -> r.inscriptionId() + "|" + e.periode().name());
+    Map<ResultatEleve, Rang> rangs = classer(eleves, ResultatEleve::moyenne, ordre);
     List<ResultatEleve> classes =
         eleves.stream()
-            .map(r -> new ResultatEleve(r.inscriptionId(), r.matieres(), r.groupes(), r.totalCoef(), r.totalPoints(), r.moyenne(), rangs.get(r), r.cote()))
+            .map(
+                r ->
+                    new ResultatEleve(
+                        r.inscriptionId(), r.matieres(), r.groupes(), r.totalCoef(), r.totalPoints(), r.moyenne(), rangs.get(r), r.cote(), r.classe(),
+                        r.minutesNonJustifiees()))
             .toList();
-    return new ResultatsClasse(e.periode(), stats, groupes, classes, profilDe(classes.stream().map(ResultatEleve::moyenne).toList()));
+    // Sur l'année, la délibération compte comme une réussite.
+    double seuilReussite = e.periode() == Periode.A && regles.moyenneDeliberation() != null ? Math.min(10, regles.moyenneDeliberation()) : 10;
+    return new ResultatsClasse(e.periode(), stats, groupes, classes, profilDe(classes.stream().map(ResultatEleve::moyenne).toList(), seuilReussite));
+  }
+
+  /** Moyenne de chaque groupe de l'élève, par nom de groupe en minuscules (départage). */
+  public static Map<String, Double> moyennesParNom(List<LigneGroupe> lignes, Map<String, String> nomsGroupes) {
+    Map<String, Double> m = new HashMap<>();
+    for (LigneGroupe l : lignes) {
+      String nom = nomsGroupes.get(l.groupeId());
+      if (nom != null && l.moyenne() != null) m.put(nom, l.moyenne());
+    }
+    return m;
   }
 
   /** Profil d'un ensemble de moyennes (null = élève sans moyenne, compté dans l'effectif). */
   public static ProfilClasse profilDe(List<Double> moyennesAvecNulles) {
+    return profilDe(moyennesAvecNulles, 10);
+  }
+
+  /** Profil, avec la moyenne qui vaut réussite (10, ou la moyenne de délibération sur l'année). */
+  public static ProfilClasse profilDe(List<Double> moyennesAvecNulles, double seuilReussite) {
     List<Double> moyennes = moyennesAvecNulles.stream().filter(Objects::nonNull).toList();
-    int reussis = (int) moyennes.stream().filter(v -> arrondi(v) >= 10).count();
+    int reussis = (int) moyennes.stream().filter(v -> arrondi(v) >= seuilReussite).count();
     boolean vide = moyennes.isEmpty();
     return new ProfilClasse(
         moyennesAvecNulles.size(), moyenneDe(moyennes),

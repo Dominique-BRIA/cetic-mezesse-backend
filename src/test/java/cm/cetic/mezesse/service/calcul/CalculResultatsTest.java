@@ -172,8 +172,9 @@ class CalculResultatsTest {
       ResultatsClasse r = calculer(Periode.T1, matieres, List.of("a", "b"), List.of(n("a", "maths", 1, 10), n("a", "maths", 2, 14), n("b", "maths", 1, 8)));
       assertThat(r.eleves().get(0).matieres().get(0).detail()).containsExactly(10.0, 14.0);
       assertThat(r.eleves().get(0).matieres().get(0).note()).isEqualTo(12.0);
-      // b : séquence 2 évaluée (a y a une note) donc 0
-      assertThat(r.eleves().get(1).matieres().get(0).note()).isEqualTo(4.0);
+      // b n'a rien composé en séquence 2 : non classé sur cette séquence, sa séquence 1 devient son trimestre.
+      assertThat(r.eleves().get(1).matieres().get(0).note()).isEqualTo(8.0);
+      assertThat(r.eleves().get(1).moyenne()).isEqualTo(8.0);
     }
 
     @Test
@@ -192,6 +193,147 @@ class CalculResultatsTest {
       assertThat(r.eleves().get(0).matieres().get(0).detail()).containsExactly(11.0, 14.0, 10.0);
       assertThat(r.eleves().get(0).matieres().get(0).note()).isCloseTo(35.0 / 3, within(1e-10));
     }
+  }
+
+  /** Règle du tiers et des deux tiers : non classé, matières à 0, ou matières ignorées. */
+  @Nested
+  class MatieresComposees {
+    // Six matières de coefficient 1, toutes évaluées (l'élève « ref » a toutes ses notes).
+    final List<MatiereEntree> matieres =
+        List.of(mat("m1", 1, G1, 1), mat("m2", 1, G1, 2), mat("m3", 1, G1, 3), mat("m4", 1, G2, 1), mat("m5", 1, G2, 2), mat("m6", 1, G2, 3));
+
+    List<NoteEntree> notes(String eleve, int combien) {
+      List<NoteEntree> l = new java.util.ArrayList<>();
+      for (int i = 1; i <= 6; i++) l.add(n("ref", "m" + i, 1, 10));
+      for (int i = 1; i <= combien; i++) l.add(n(eleve, "m" + i, 1, 12));
+      return l;
+    }
+
+    @Test
+    void moinsDuTiersNonClasse() {
+      ResultatsClasse r = calculer(Periode.S1, matieres, List.of("ref", "x"), notes("x", 1));
+      ResultatEleve x = r.eleve("x");
+      assertThat(x.moyenne()).isNull();
+      assertThat(x.rang()).isNull();
+      assertThat(x.nonClasse()).isTrue();
+      assertThat(x.matieres().get(0).note()).isEqualTo(12.0);
+      assertThat(x.matieres().get(1).note()).isNull();
+    }
+
+    @Test
+    void entreLeTiersEtLesDeuxTiersLesMatieresManquantesValentZero() {
+      // 3 matières sur 6 : la moitié.
+      ResultatEleve x = calculer(Periode.S1, matieres, List.of("ref", "x"), notes("x", 3)).eleve("x");
+      assertThat(x.matieres().get(5).note()).isEqualTo(0.0);
+      assertThat(x.totalCoef()).isEqualTo(6);
+      assertThat(x.moyenne()).isEqualTo(6.0);
+    }
+
+    @Test
+    void auDelaDesDeuxTiersLesMatieresManquantesSontIgnorees() {
+      // 5 matières sur 6.
+      ResultatEleve x = calculer(Periode.S1, matieres, List.of("ref", "x"), notes("x", 5)).eleve("x");
+      assertThat(x.matieres().get(5).note()).isNull();
+      assertThat(x.totalCoef()).isEqualTo(5);
+      assertThat(x.moyenne()).isEqualTo(12.0);
+    }
+
+    @Test
+    void lesSeuilsSeReglent() {
+      List<NoteEntree> l = notes("x", 3);
+      ResultatsClasse r =
+          CalculResultats.calculer(
+              new CalculResultats.Entrees(
+                  Periode.S1, matieres, List.of("ref", "x"), l, GRADES, COTES, new Resultats.Regles(60, 80, List.of(), null), Map.of(), Map.of()));
+      assertThat(r.eleve("x").nonClasse()).isTrue();
+    }
+  }
+
+  @Nested
+  class TrimestreClasse {
+    final List<MatiereEntree> matieres = List.of(mat("maths", 2, G1, 1), mat("fr", 1, G1, 2));
+
+    @Test
+    void uneSeuleNoteDansLeTrimestreDevientLaNoteTrimestrielle() {
+      // x n'a pas de note de français en séquence 1 mais 16 en séquence 2 : 16 devient sa note trimestrielle de français.
+      ResultatsClasse r =
+          calculer(
+              Periode.T1, matieres, List.of("x", "y"),
+              List.of(n("x", "maths", 1, 10), n("y", "maths", 1, 10), n("y", "fr", 1, 10), n("x", "maths", 2, 14), n("x", "fr", 2, 16), n("y", "maths", 2, 9), n("y", "fr", 2, 9)));
+      assertThat(r.eleve("x").matieres().get(1).note()).isEqualTo(16.0);
+    }
+
+    @Test
+    void nonClasseAuxDeuxSequencesNonClasseAuTrimestre() {
+      ResultatsClasse r =
+          calculer(
+              Periode.T1, List.of(mat("m1", 1, G1, 1), mat("m2", 1, G1, 2), mat("m3", 1, G1, 3), mat("m4", 1, G1, 4)), List.of("ref", "x"),
+              List.of(
+                  n("ref", "m1", 1, 10), n("ref", "m2", 1, 10), n("ref", "m3", 1, 10), n("ref", "m4", 1, 10), n("ref", "m1", 2, 10), n("ref", "m2", 2, 10),
+                  n("ref", "m3", 2, 10), n("ref", "m4", 2, 10), n("x", "m1", 1, 15), n("x", "m1", 2, 15)));
+      assertThat(r.eleve("x").moyenne()).isNull();
+      assertThat(r.eleve("x").nonClasse()).isTrue();
+    }
+
+    @Test
+    void lAnneeEstLaMoyenneDesTrimestresClasses() {
+      List<MatiereEntree> m = List.of(mat("maths", 1, G1, 1));
+      // x : classé au T1 (12) et au T3 (8), rien au T2 où ref a des notes : année = (12 + 8) / 2.
+      ResultatsClasse r =
+          calculer(
+              Periode.A, m, List.of("ref", "x"),
+              List.of(n("ref", "maths", 1, 10), n("ref", "maths", 3, 10), n("ref", "maths", 5, 10), n("x", "maths", 1, 12), n("x", "maths", 5, 8)));
+      assertThat(r.eleve("x").moyenne()).isEqualTo(10.0);
+    }
+  }
+
+  @Nested
+  class PremierUnique {
+    final List<MatiereEntree> matieres = List.of(mat("fr", 1, G1, 1), mat("atelier", 1, G2, 1));
+
+    ResultatsClasse calculer(List<Resultats.Critere> criteres, Map<String, Integer> minutes) {
+      // a et b : 12 de moyenne ; a meilleur en Pro (14 contre 10), b meilleur en Général.
+      List<NoteEntree> notes = List.of(n("a", "fr", 1, 10), n("a", "atelier", 1, 14), n("b", "fr", 1, 14), n("b", "atelier", 1, 10), n("c", "fr", 1, 12), n("c", "atelier", 1, 12), n("d", "fr", 1, 5), n("d", "atelier", 1, 5));
+      return CalculResultats.calculer(
+          new CalculResultats.Entrees(
+              Periode.S1, matieres, List.of("a", "b", "c", "d"), notes, GRADES, COTES, new Resultats.Regles(33.33, 66.67, criteres, null), minutes,
+              Map.of("a", "ZOA Paul", "b", "ABENA Luc", "c", "MBARGA Eve", "d", "ONANA Jo")));
+    }
+
+    @Test
+    void lesExAequoDeLaPremierePlaceSontDepartagesParLeGroupeChoisi() {
+      ResultatsClasse r = calculer(List.of(new Resultats.Critere("GROUPE", "Pro")), Map.of());
+      assertThat(r.eleve("a").rang()).isEqualTo(new Rang(1, false));
+      assertThat(r.eleve("b").rang()).isEqualTo(new Rang(2, true));
+      assertThat(r.eleve("c").rang()).isEqualTo(new Rang(2, true));
+      assertThat(r.eleve("d").rang()).isEqualTo(new Rang(4, false));
+    }
+
+    @Test
+    void puisLaDisciplinePuisLOrdreAlphabetique() {
+      ResultatsClasse r = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of("a", 120, "b", 0, "c", 60));
+      assertThat(r.eleve("b").rang()).isEqualTo(new Rang(1, false));
+      ResultatsClasse alpha = calculer(List.of(new Resultats.Critere("ALPHABETIQUE", null)), Map.of());
+      assertThat(alpha.eleve("b").rang()).isEqualTo(new Rang(1, false));
+    }
+
+    @Test
+    void sansCritereDecisifUnTirageAuSortStable() {
+      ResultatsClasse r1 = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of());
+      ResultatsClasse r2 = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of());
+      long premiers = r1.eleves().stream().filter(e -> e.rang() != null && e.rang().rang() == 1).count();
+      assertThat(premiers).isEqualTo(1);
+      assertThat(r1.eleves().stream().map(ResultatEleve::rang).toList()).isEqualTo(r2.eleves().stream().map(ResultatEleve::rang).toList());
+    }
+  }
+
+  @Test
+  void decisionDeFinDAnnee() {
+    assertThat(CalculResultats.decision(10.0, 9.0)).isEqualTo(Resultats.Decision.ADMIS);
+    assertThat(CalculResultats.decision(9.2, 9.0)).isEqualTo(Resultats.Decision.ADMIS_DELIBERATION);
+    assertThat(CalculResultats.decision(8.99, 9.0)).isEqualTo(Resultats.Decision.REDOUBLE);
+    assertThat(CalculResultats.decision(9.5, null)).isEqualTo(Resultats.Decision.REDOUBLE);
+    assertThat(CalculResultats.decision(null, 9.0)).isNull();
   }
 
   @Test

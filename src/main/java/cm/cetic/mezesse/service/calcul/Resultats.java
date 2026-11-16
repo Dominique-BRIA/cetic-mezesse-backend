@@ -39,6 +39,12 @@ public final class Resultats {
 
   public record LigneGroupe(String groupeId, int coefficient, double total, Double moyenne) {}
 
+  /**
+   * Résultat d'un élève sur la période.
+   *
+   * @param classe faux si l'élève n'est pas classé (trop peu de matières composées) : pas de moyenne ni de rang
+   * @param minutesNonJustifiees absences non justifiées de la période (départage de la première place, tableau d'honneur)
+   */
   public record ResultatEleve(
       String inscriptionId,
       List<LigneMatiere> matieres,
@@ -47,7 +53,49 @@ public final class Resultats {
       double totalPoints,
       Double moyenne,
       Rang rang,
-      String cote) {}
+      String cote,
+      boolean classe,
+      int minutesNonJustifiees) {
+
+    /** Non classé alors qu'il a des notes : à afficher « NC » plutôt qu'un rang vide. */
+    public boolean nonClasse() {
+      return !classe && matieres.stream().anyMatch(l -> l.note() != null);
+    }
+  }
+
+  /** Critère de départage de la première place : moyenne d'un groupe de matières (par son nom), discipline, ordre alphabétique. */
+  public record Critere(String type, String groupe) {
+    public static final String GROUPE = "GROUPE";
+    public static final String DISCIPLINE = "DISCIPLINE";
+    public static final String ALPHABETIQUE = "ALPHABETIQUE";
+  }
+
+  /**
+   * Règles réglées dans les paramètres.
+   *
+   * @param seuilNonClasse pourcentage de matières composées en dessous duquel l'élève n'est pas classé (33,33)
+   * @param seuilIgnorees pourcentage à partir duquel les matières non composées sont ignorées ; entre les deux elles valent 0 (66,67)
+   * @param criteres ordre de départage de la première place (vide : matières professionnelles, discipline, ordre alphabétique)
+   * @param moyenneDeliberation moyenne annuelle qui permet le passage après délibération (null : pas de délibération)
+   */
+  public record Regles(double seuilNonClasse, double seuilIgnorees, List<Critere> criteres, Double moyenneDeliberation) {
+    public static final Regles DEFAUT = new Regles(33.33, 66.67, List.of(), null);
+  }
+
+  /** Décision de fin d'année, d'après la moyenne annuelle. */
+  public enum Decision {
+    ADMIS("Admis(e) en classe supérieure", "Promoted"),
+    ADMIS_DELIBERATION("Admis(e) après délibération", "Promoted (deliberation)"),
+    REDOUBLE("Redouble", "Repeats the year");
+
+    public final String fr;
+    public final String en;
+
+    Decision(String fr, String en) {
+      this.fr = fr;
+      this.en = en;
+    }
+  }
 
   /** Profil de la classe ; nombreMoyennes = élèves à 10 ou plus. */
   public record ProfilClasse(

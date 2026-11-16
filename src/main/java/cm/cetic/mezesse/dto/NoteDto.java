@@ -77,7 +77,9 @@ public final class NoteDto {
   public record MatiereReleve(String id, String nom, int coefficient, String groupe, String professeur, boolean evaluee, Double moyenne) {}
 
   public record EleveReleve(
-      String inscriptionId, String eleveId, String matricule, String nom, String prenoms, Sexe sexe, List<Double> notes, Double moyenne, Rang rang, int numero) {}
+      String inscriptionId, String eleveId, String matricule, String nom, String prenoms, Sexe sexe, List<Double> notes, Double moyenne, Rang rang, int numero,
+      /** A des notes mais trop peu de matières composées : « NC ». */
+      boolean nonClasse) {}
 
   /** Relevé de toute une classe pour une période (consultation par la direction). */
   public record ReleveClasse(ClasseReleve classe, Periode periode, List<MatiereReleve> matieres, List<EleveReleve> eleves, ProfilClasse profil) {}

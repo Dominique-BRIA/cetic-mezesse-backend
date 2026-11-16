@@ -68,15 +68,30 @@ public class StatistiqueService {
   private record Valeur(Sexe sexe, double v) {}
 
   static Resume resume(List<Double> v) {
-    ProfilClasse p = CalculResultats.profilDe(v);
+    return resume(v, 10);
+  }
+
+  /** « seuil » : moyenne qui vaut réussite (10 ; sur l'année, la moyenne de délibération si elle est réglée). */
+  static Resume resume(List<Double> v, double seuil) {
+    ProfilClasse p = CalculResultats.profilDe(v, seuil);
     return new Resume(v.size(), p.moyenneGenerale(), p.min(), p.max(), p.tauxReussite(), p.ecartType(), p.nombreMoyennes());
   }
 
   private static List<ParSexe> parSexe(List<Valeur> valeurs) {
+    return parSexe(valeurs, 10);
+  }
+
+  /** Moyenne qui vaut réussite sur la période : 10, ou sur l'année la moyenne de délibération (si plus basse). */
+  private double seuilReussite(Periode p) {
+    Double d = resultats.regles().moyenneDeliberation();
+    return p == Periode.A && d != null ? Math.min(10, d) : 10;
+  }
+
+  private static List<ParSexe> parSexe(List<Valeur> valeurs, double seuil) {
     return Stream.of(Sexe.F, Sexe.M)
         .map(
             sexe -> {
-              Resume r = resume(valeurs.stream().filter(x -> x.sexe() == sexe).map(Valeur::v).toList());
+              Resume r = resume(valeurs.stream().filter(x -> x.sexe() == sexe).map(Valeur::v).toList(), seuil);
               return new ParSexe(sexe, r.effectif(), r.moyenne(), r.min(), r.max(), r.tauxReussite(), r.ecartType(), r.reussis());
             })
         .toList();
@@ -153,7 +168,7 @@ public class StatistiqueService {
         p,
         d.resultats().profil(),
         CalculResultats.repartition(valeurs),
-        parSexe(moyennes.stream().map(e -> new Valeur(e.sexe(), e.moyenne())).toList()),
+        parSexe(moyennes.stream().map(e -> new Valeur(e.sexe(), e.moyenne())).toList(), seuilReussite(p)),
         d.resultats().matieres().stream()
             .map(
                 s ->
@@ -172,7 +187,20 @@ public class StatistiqueService {
     List<DonneesClasse> donnees = lesClasses.stream().map(c -> resultats.resultatsClasse(c.getId(), p, b)).toList();
 
     List<EleveEtablissement> eleves = new ArrayList<>();
+    // Départage de la première place : moyenne des groupes (par nom), absences non justifiées, nom.
+    Map<String, Map<String, Double>> groupesParEleve = new java.util.HashMap<>();
+    Map<String, Integer> minutesParEleve = new java.util.HashMap<>();
+    List<cm.cetic.mezesse.service.calcul.Resultats.Groupe> tousGroupes = new ArrayList<>();
     for (DonneesClasse d : donnees) {
+      Map<String, String> nomsGroupes = new java.util.HashMap<>();
+      for (var g : d.resultats().groupes()) {
+        nomsGroupes.put(g.id(), g.nom().strip().toLowerCase(Locale.ROOT));
+        if (tousGroupes.stream().noneMatch(x -> x.nom().equalsIgnoreCase(g.nom()))) tousGroupes.add(g);
+      }
+      for (ResultatEleve r : d.resultats().eleves()) {
+        groupesParEleve.put(r.inscriptionId(), CalculResultats.moyennesParNom(r.groupes(), nomsGroupes));
+        minutesParEleve.put(r.inscriptionId(), r.minutesNonJustifiees());
+      }
       for (ResultatEleve r : d.resultats().eleves()) {
         Inscription i = d.inscription(r.inscriptionId());
         Eleve e = i.getEleve();
@@ -183,7 +211,16 @@ public class StatistiqueService {
       }
     }
     List<EleveEtablissement> avecMoyenne = eleves.stream().filter(e -> e.moyenne() != null).toList();
-    Map<EleveEtablissement, Rang> rangs = CalculResultats.classer(avecMoyenne, EleveEtablissement::moyenne);
+    var criteres = resultats.regles().criteres();
+    if (criteres == null || criteres.isEmpty()) criteres = CalculResultats.criteresParDefaut(tousGroupes);
+    java.util.Comparator<EleveEtablissement> ordre =
+        CalculResultats.departage(
+            criteres,
+            e -> groupesParEleve.getOrDefault(e.inscriptionId(), Map.of()),
+            e -> minutesParEleve.getOrDefault(e.inscriptionId(), 0),
+            e -> e.nom() + " " + e.prenoms(),
+            e -> e.inscriptionId() + "|" + p.name());
+    Map<EleveEtablissement, Rang> rangs = CalculResultats.classer(avecMoyenne, EleveEtablissement::moyenne, ordre);
     List<EleveEtablissement> classement =
         new ArrayList<>(
             avecMoyenne.stream()
@@ -193,7 +230,10 @@ public class StatistiqueService {
                             e.inscriptionId(), e.eleveId(), e.matricule(), e.nom(), e.prenoms(), e.sexe(), e.classe(), e.moyenne(), e.rangClasse(),
                             rangs.get(e)))
                 .toList());
-    classement.sort(Comparator.comparingInt((EleveEtablissement e) -> e.rang().rang()).thenComparing(EleveEtablissement::nom, ORDRE_ALPHABETIQUE));
+    classement.sort(
+        Comparator.comparingInt((EleveEtablissement e) -> e.rang().rang())
+            .thenComparing(Comparator.comparingDouble((EleveEtablissement e) -> e.moyenne()).reversed())
+            .thenComparing(EleveEtablissement::nom, ORDRE_ALPHABETIQUE));
 
     List<ClasseEtablissement> parClasse =
         donnees.stream()
@@ -248,9 +288,9 @@ public class StatistiqueService {
             effectifs.getOrDefault("ACTIF", 0L), effectifs.getOrDefault("RENVOYE", 0L), lesClasses.size(),
             utilisateurs.countByRoleAndActifTrue(Role.PROFESSEUR),
             eleves.stream().filter(e -> e.sexe() == Sexe.F).count(), eleves.stream().filter(e -> e.sexe() == Sexe.M).count()),
-        resume(valeurs),
+        resume(valeurs, seuilReussite(p)),
         CalculResultats.repartition(valeurs),
-        parSexe(avecMoyenne.stream().map(e -> new Valeur(e.sexe(), e.moyenne())).toList()),
+        parSexe(avecMoyenne.stream().map(e -> new Valeur(e.sexe(), e.moyenne())).toList(), seuilReussite(p)),
         classement.stream().filter(e -> e.rang().rang() == 1).toList(),
         classement.stream().filter(e -> e.rang().rang() == dernierRang).toList(),
         classees.isEmpty() ? null : classees.get(0),

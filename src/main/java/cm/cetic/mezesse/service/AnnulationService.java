@@ -87,6 +87,7 @@ public class AnnulationService {
           Map.entry("etablissement.modifier", "Les informations de l'établissement reprendront leurs valeurs précédentes."),
           Map.entry("bareme.modifier", "L'ancien barème sera rétabli."),
           Map.entry("tableauhonneur.seuil", "Le tableau d'honneur reprendra son ancienne moyenne minimale."),
+          Map.entry("resultats.regles", "Les règles des résultats reprendront leurs valeurs précédentes."),
           Map.entry("sanctions.seuils", "Les paliers de sanction reprendront leurs anciennes valeurs."),
           Map.entry("enseignant.fusionner", "Les deux comptes seront de nouveau séparés, chacun avec ses matières et ses notes."),
           Map.entry("eleve.fusionner", "Les deux fiches seront de nouveau séparées, chacune avec son inscription et ses notes."),
@@ -215,6 +216,7 @@ public class AnnulationService {
       case "sequence.ouvrir", "sequence.fermer" -> saisieChangee(a);
       case "etablissement.modifier" -> etablissementModifie(a);
       case "tableauhonneur.seuil" -> seuilModifie(a);
+      case "resultats.regles" -> reglesResultatsModifiees(a);
       case "sanctions.liste" -> sanctionsModifiees(a);
       case "bareme.modifier" -> baremeModifie(a);
       default -> throw ApiException.conflit("Ce type de décision ne peut pas être annulé automatiquement.");
@@ -670,6 +672,42 @@ public class AnnulationService {
     if (!egal(e.getSeuilTableauHonneur(), a.get("apres"))) return RIEN;
     e.setSeuilTableauHonneur(new BigDecimal(a.get("avant").toString()));
     return new Resultat("Le tableau d'honneur part de nouveau de " + cm.cetic.mezesse.util.Nombres.fr(e.getSeuilTableauHonneur().doubleValue()) + " de moyenne.");
+  }
+
+  /** Règles des résultats : reprennent les valeurs d'avant, si personne ne les a changées depuis. */
+  @SuppressWarnings("unchecked")
+  private Resultat reglesResultatsModifiees(Map<String, Object> a) {
+    Etablissement e = etablissements.findById(Etablissement.ID).orElse(null);
+    if (e == null) return new Resultat("Il n'y avait pas de règles à rétablir.");
+    Map<String, Object> actuel = cm.cetic.mezesse.service.EtablissementService.donnees(cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats.de(e));
+    if (!Objects.equals(json(actuel), json(a.get("apres")))) return RIEN;
+    Map<String, Object> av = (Map<String, Object>) a.get("avant");
+    e.setMoyenneDeliberation(av.get("moyenneDeliberation") == null ? null : new BigDecimal(av.get("moyenneDeliberation").toString()));
+    e.setHeuresRefusTableauHonneur(av.get("heuresRefusTableauHonneur") == null ? null : ((Number) av.get("heuresRefusTableauHonneur")).intValue());
+    e.setSeuilNonClasse(new BigDecimal(av.get("seuilNonClasse").toString()));
+    e.setSeuilMatieresIgnorees(new BigDecimal(av.get("seuilMatieresIgnorees").toString()));
+    List<Map<String, Object>> criteres = av.get("criteres") == null ? List.of() : (List<Map<String, Object>>) av.get("criteres");
+    List<Map<String, String>> liste = new ArrayList<>();
+    for (Map<String, Object> c : criteres) {
+      Map<String, String> m = new java.util.LinkedHashMap<>();
+      m.put("type", texte(c.get("type")));
+      if (c.get("groupe") != null) m.put("groupe", texte(c.get("groupe")));
+      liste.add(m);
+    }
+    e.setCriteresDepartage(liste.isEmpty() ? null : liste);
+    return new Resultat("Les règles des résultats ont repris leurs valeurs précédentes.");
+  }
+
+  /** Comparaison de valeurs JSON indépendante des types numériques (12 et 12.0). */
+  private static String json(Object o) {
+    if (o instanceof Map<?, ?> m) {
+      StringBuilder s = new StringBuilder("{");
+      new java.util.TreeMap<>(m).forEach((k, v) -> s.append(k).append(':').append(json(v)).append(','));
+      return s.append('}').toString();
+    }
+    if (o instanceof List<?> l) return l.stream().map(AnnulationService::json).toList().toString();
+    if (o instanceof Number n) return new BigDecimal(n.toString()).stripTrailingZeros().toPlainString();
+    return String.valueOf(o);
   }
 
   @SuppressWarnings("unchecked")

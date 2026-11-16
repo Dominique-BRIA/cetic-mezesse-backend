@@ -48,6 +48,13 @@ public class EtablissementController {
     return service.seuilTableauHonneur(moi, d.seuil());
   }
 
+  /** Règles des résultats (délibération, tableau d'honneur, matières composées, départage du premier) : direction. */
+  @PutMapping("/etablissement/resultats")
+  @Direction
+  public Vue reglesResultats(@AuthenticationPrincipal UtilisateurConnecte moi, @Valid @RequestBody cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats d) {
+    return service.reglesResultats(moi, d);
+  }
+
   /** Sanctions pour absences non justifiées : tout le monde les consulte, le SG les règle. */
   @GetMapping("/sanctions-absences")
   public List<cm.cetic.mezesse.dto.EtablissementDto.SanctionVue> sanctions() {

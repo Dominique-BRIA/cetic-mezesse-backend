@@ -13,6 +13,7 @@ import cm.cetic.mezesse.entity.Utilisateur;
 import cm.cetic.mezesse.service.ResultatsService.DonneesClasse;
 import cm.cetic.mezesse.service.calcul.CalculResultats;
 import cm.cetic.mezesse.service.calcul.Periode;
+import cm.cetic.mezesse.service.calcul.Resultats;
 import cm.cetic.mezesse.service.calcul.Resultats.Groupe;
 import cm.cetic.mezesse.service.calcul.Resultats.LigneGroupe;
 import cm.cetic.mezesse.service.calcul.Resultats.LigneMatiere;
@@ -50,7 +51,17 @@ public final class BulletinPdf {
    */
   public record Contexte(
       Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur,
-      Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline) {}
+      Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline,
+      cm.cetic.mezesse.service.calcul.Resultats.ResultatsClasse annuel,
+      Double moyenneDeliberation) {
+
+    /** Sans bilan annuel ni délibération (séquences, trimestres 1 et 2). */
+    public Contexte(
+        Etablissement etab, DonneesClasse donnees, List<Rappel> rappels, Map<String, String> competences, Map<String, byte[]> photos, double seuilTableauHonneur,
+        Map<String, cm.cetic.mezesse.service.BilanAbsences.Discipline> discipline) {
+      this(etab, donnees, rappels, competences, photos, seuilTableauHonneur, discipline, null, null);
+    }
+  }
 
   /** « Compétences très bien acquises » → « Très bien acquises » : le titre du bloc dit déjà de quoi il s'agit. */
   static String sansPrefixe(String s) {
@@ -249,11 +260,12 @@ public final class BulletinPdf {
     rangee(pdf, xB2, lGauche, yT, "Total des points / Total", fr(r.totalPoints()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 10.6f, "Total des coef. / Coef", String.valueOf(r.totalCoef()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 21.2f, "Moyenne / Average", r.moyenne() == null ? "—" : fr(r.moyenne()) + "/20", true, 46);
-    rangee(pdf, xB2, lGauche, yT + 31.8f, "Rang / Rank", r.rang() != null ? CalculResultats.formatRang(r.rang()) + " / " + classesAvecMoyenne : "—", true, 42);
+    String rang = r.rang() != null ? CalculResultats.formatRang(r.rang()) + " / " + classesAvecMoyenne : r.nonClasse() ? "Non classé / Not ranked" : "—";
+    rangee(pdf, xB2, lGauche, yT + 31.8f, "Rang / Rank", rang, true, 42);
     for (int k = 0; k < ctx.rappels().size(); k++) {
       Rappel rp = ctx.rappels().get(k);
       ResultatEleve er = rp.resultats().eleve(inscriptionId);
-      String valeur = er == null || er.moyenne() == null ? "—" : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rang()) + ")";
+      String valeur = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rang()) + ")";
       rangee(pdf, xB2, lGauche, yT + 42.4f + k * 10.6f, libelleCourt(rp.periode())[0], valeur, false, 58);
     }
     // Cotes de compétence, la cote obtenue est cochée
@@ -300,12 +312,25 @@ public final class BulletinPdf {
       xs2 += ls[i];
     }
     if (pp != null) pdf.ligne(pp.nomComplet(), X0 + ls[0] + ls[1] + 3, y + 21, ls[2] - 6, Style.de(6.6f));
-    if (cm.cetic.mezesse.service.TableauHonneurService.auTableau(r.moyenne(), ctx.seuilTableauHonneur())) {
+    if (cm.cetic.mezesse.service.TableauHonneurService.auTableau(r, ctx.seuilTableauHonneur(), etab.getHeuresRefusTableauHonneur())) {
       pdf.ligne("TABLEAU D'HONNEUR / HONOUR ROLL", X0 + 3, y + 22, ls[0] - 6, Style.de(8).gras().couleur("#a8801f"));
     }
-    if (p == Periode.A) {
+    // Fin d'année : le bulletin annuel et celui du 3e trimestre portent le bilan de l'année et la décision.
+    ResultatEleve an = p == Periode.A ? r : ctx.annuel() == null ? null : ctx.annuel().eleve(inscriptionId);
+    if (an != null) {
+      if (p != Periode.A) {
+        long classesAn = ctx.annuel().eleves().stream().filter(x -> x.moyenne() != null).count();
+        String bilan =
+            an.moyenne() == null
+                ? (an.nonClasse() ? "Non classé(e) sur l'année / Not ranked" : "—")
+                : fr(an.moyenne()) + "/20  ·  Rang " + CalculResultats.formatRang(an.rang()) + " / " + classesAn;
+        pdf.ligne("Bilan annuel / Annual results : " + bilan, X0 + 3, y + 34, ls[0] - 6, Style.de(6.3f).gras());
+      }
+      Resultats.Decision d = CalculResultats.decision(an.moyenne(), ctx.moyenneDeliberation());
       pdf.ligne("Décision du conseil de classe / Class council decision :", X0 + 3, y + hs - 22, ls[0] - 6, Style.de(6).gras());
-      pdf.ligne("Admis(e) en classe supérieure  /  Redouble  /  Exclu(e)", X0 + 3, y + hs - 12, ls[0] - 6, Style.de(6).couleur(Couleurs.GRIS));
+      pdf.ligne(
+          d == null ? "Admis(e) en classe supérieure  /  Redouble  /  Exclu(e)" : d.fr + " / " + d.en, X0 + 3, y + hs - 12, ls[0] - 6,
+          d == null ? Style.de(6).couleur(Couleurs.GRIS) : Style.de(7).gras().couleur(d == Resultats.Decision.REDOUBLE ? "#b3261e" : "#1e764c"));
     }
 
     // ---- Pied ----

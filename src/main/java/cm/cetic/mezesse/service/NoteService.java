@@ -221,7 +221,7 @@ public class NoteService {
                   Eleve el = i.getEleve();
                   return new EleveReleve(
                       i.getId(), el.getId(), el.getMatricule(), el.getNom(), el.getPrenoms(), el.getSexe(),
-                      e.matieres().stream().map(LigneMatiere::note).toList(), e.moyenne(), e.rang(), numeros.getOrDefault(i.getId(), 0));
+                      e.matieres().stream().map(LigneMatiere::note).toList(), e.moyenne(), e.rang(), numeros.getOrDefault(i.getId(), 0), e.nonClasse());
                 })
             .toList(),
         r.profil());

@@ -98,6 +98,45 @@ public class EtablissementService {
     return Vue.de(e);
   }
 
+  /** Règles des résultats (délibération, tableau d'honneur, matières composées, départage), réglées par la direction. */
+  @Transactional
+  public Vue reglesResultats(UtilisateurConnecte moi, cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats d) {
+    if (d.seuilMatieresIgnorees() < d.seuilNonClasse()) {
+      throw ApiException.invalide("La part qui fait ignorer les matières non composées doit être au moins égale à celle du non-classement.");
+    }
+    Etablissement e = requis();
+    Map<String, Object> avant = donnees(cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats.de(e));
+    e.setMoyenneDeliberation(d.moyenneDeliberation() == null ? null : BigDecimal.valueOf(d.moyenneDeliberation()).setScale(2, java.math.RoundingMode.HALF_UP));
+    e.setHeuresRefusTableauHonneur(d.heuresRefusTableauHonneur());
+    e.setSeuilNonClasse(BigDecimal.valueOf(d.seuilNonClasse()).setScale(2, java.math.RoundingMode.HALF_UP));
+    e.setSeuilMatieresIgnorees(BigDecimal.valueOf(d.seuilMatieresIgnorees()).setScale(2, java.math.RoundingMode.HALF_UP));
+    List<cm.cetic.mezesse.dto.EtablissementDto.CritereDepartage> criteres = d.criteres() == null ? List.of() : d.criteres();
+    e.setCriteresDepartage(
+        criteres.isEmpty()
+            ? null
+            : criteres.stream()
+                .map(c -> {
+                  Map<String, String> m = new java.util.LinkedHashMap<>();
+                  m.put("type", c.type());
+                  if ("GROUPE".equals(c.type())) m.put("groupe", c.groupe() == null ? "" : c.groupe().strip());
+                  return m;
+                })
+                .collect(java.util.stream.Collectors.toList()));
+    journal.consigner(
+        moi, DomaineDecision.ADMINISTRATION, "resultats.regles", "Règles des résultats modifiées (délibération, tableau d'honneur, classement)", "/parametres",
+        Donnees.objet("avant", avant, "apres", donnees(cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats.de(e))));
+    return Vue.de(e);
+  }
+
+  /** Les règles en objet JSON, pour le journal et l'annulation. */
+  static Map<String, Object> donnees(cm.cetic.mezesse.dto.EtablissementDto.ReglesResultats r) {
+    List<Map<String, Object>> criteres = new java.util.ArrayList<>();
+    for (var c : r.criteres()) criteres.add(Donnees.objet("type", c.type(), "groupe", c.groupe()));
+    return Donnees.objet(
+        "moyenneDeliberation", r.moyenneDeliberation(), "heuresRefusTableauHonneur", r.heuresRefusTableauHonneur(), "seuilNonClasse", r.seuilNonClasse(),
+        "seuilMatieresIgnorees", r.seuilMatieresIgnorees(), "criteres", criteres);
+  }
+
   public List<SanctionVue> sanctions() {
     return sanctionsAbsences.findAllByOrderByMinutesAsc().stream().map(s -> new SanctionVue(s.getId(), s.getLibelle(), s.getLigne(), s.getMinutes())).toList();
   }

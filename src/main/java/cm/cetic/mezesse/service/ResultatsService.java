@@ -35,6 +35,8 @@ public class ResultatsService {
   private final InscriptionRepository inscriptions;
   private final NoteRepository notes;
   private final BaremeRepository baremes;
+  private final EtablissementService etablissement;
+  private final BilanAbsences bilanAbsences;
 
   /** Classe, élèves actifs (ordre alphabétique) et résultats calculés. */
   public record DonneesClasse(Classe classe, List<Inscription> inscriptions, ResultatsClasse resultats, Baremes baremes) {
@@ -51,6 +53,18 @@ public class ResultatsService {
 
   private static List<Seuil> seuils(List<Bareme> lignes, TypeBareme type) {
     return lignes.stream().filter(b -> b.getType() == type).map(b -> new Seuil(b.getLibelle(), b.getLibelleLong(), b.getMin().doubleValue())).toList();
+  }
+
+  /** Règles des paramètres : seuils des matières composées, départage de la première place, délibération. */
+  public cm.cetic.mezesse.service.calcul.Resultats.Regles regles() {
+    var e = etablissement.requis();
+    List<cm.cetic.mezesse.service.calcul.Resultats.Critere> criteres =
+        e.getCriteresDepartage() == null
+            ? List.of()
+            : e.getCriteresDepartage().stream().map(c -> new cm.cetic.mezesse.service.calcul.Resultats.Critere(c.get("type"), c.get("groupe"))).toList();
+    return new cm.cetic.mezesse.service.calcul.Resultats.Regles(
+        e.getSeuilNonClasse().doubleValue(), e.getSeuilMatieresIgnorees().doubleValue(), criteres,
+        e.getMoyenneDeliberation() == null ? null : e.getMoyenneDeliberation().doubleValue());
   }
 
   public DonneesClasse resultatsClasse(String classeId, Periode periode) {
@@ -73,9 +87,14 @@ public class ResultatsService {
         notes.pourCalcul(classeId, periode.sequences()).stream()
             .map(n -> new NoteEntree(n.inscriptionId(), n.matiereId(), n.sequence(), n.valeur().doubleValue()))
             .toList();
+    List<String> ids = actives.stream().map(Inscription::getId).toList();
+    // Absences non justifiées de la période (départage de la première place, tableau d'honneur) et noms (ordre alphabétique).
+    java.util.Map<String, Integer> minutes = new java.util.HashMap<>();
+    bilanAbsences.heures(ids, periode.sequences()).forEach((k, h) -> minutes.put(k, h.nonJustifiees()));
+    java.util.Map<String, String> noms = new java.util.HashMap<>();
+    for (Inscription i : actives) noms.put(i.getId(), i.getEleve().getNom() + " " + i.getEleve().getPrenoms());
     ResultatsClasse r =
-        CalculResultats.calculer(
-            new CalculResultats.Entrees(periode, entrees, actives.stream().map(Inscription::getId).toList(), lesNotes, b.grades(), b.cotes()));
+        CalculResultats.calculer(new CalculResultats.Entrees(periode, entrees, ids, lesNotes, b.grades(), b.cotes(), regles(), minutes, noms));
     return new DonneesClasse(classe, actives, r, b);
   }
 }

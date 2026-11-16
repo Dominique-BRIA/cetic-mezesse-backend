@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
+import java.util.List;
 
 /** Informations de l'établissement (en-têtes des documents) et barèmes des mentions. */
 public final class EtablissementDto {
@@ -33,7 +34,8 @@ public final class EtablissementDto {
       String telephone,
       String prefixeMatricule,
       String sigleEn,
-      double seuilTableauHonneur) {
+      double seuilTableauHonneur,
+      ReglesResultats reglesResultats) {
 
     public static Vue de(Etablissement e) {
       return e == null
@@ -41,7 +43,7 @@ public final class EtablissementDto {
           : new Vue(
               e.getId(), e.getNomFr(), e.getNomEn(), e.getSigle(), e.getRegionFr(), e.getRegionEn(), e.getDepartementFr(),
               e.getDepartementEn(), e.getArrondissement(), e.getLocalite(), e.getCode(), e.getBoitePostale(), e.getTelephone(),
-              e.getPrefixeMatricule(), e.getSigleEn(), e.getSeuilTableauHonneur().doubleValue());
+              e.getPrefixeMatricule(), e.getSigleEn(), e.getSeuilTableauHonneur().doubleValue(), ReglesResultats.de(e));
     }
   }
 
@@ -87,6 +89,35 @@ public final class EtablissementDto {
           @DecimalMax(value = "20", message = "entre 0 et 20")
           @Digits(integer = 2, fraction = 2, message = "deux décimales au plus")
           Double seuil) {}
+
+  /** Critère de départage de la première place : GROUPE (avec le nom du groupe), DISCIPLINE ou ALPHABETIQUE. */
+  public record CritereDepartage(
+      @NotBlank(message = "obligatoire") @jakarta.validation.constraints.Pattern(regexp = "GROUPE|DISCIPLINE|ALPHABETIQUE", message = "critère inconnu") String type,
+      @Size(max = 120, message = "120 caractères au plus") String groupe) {}
+
+  /**
+   * Règles des résultats : moyenne de délibération (annuelle, vide : pas de délibération), heures d'absence non justifiées
+   * qui refusent le tableau d'honneur (vide : pas de limite), parts des matières composées (non classé, matières
+   * ignorées) et ordre de départage de la première place (vide : ordre par défaut).
+   */
+  public record ReglesResultats(
+      @DecimalMin(value = "0", message = "entre 0 et 20") @DecimalMax(value = "20", message = "entre 0 et 20") @Digits(integer = 2, fraction = 2, message = "deux décimales au plus")
+          Double moyenneDeliberation,
+      @jakarta.validation.constraints.Min(value = 1, message = "au moins 1 heure") @jakarta.validation.constraints.Max(value = 1000, message = "1000 heures au plus")
+          Integer heuresRefusTableauHonneur,
+      @NotNull(message = "obligatoire") @DecimalMin(value = "0", message = "entre 0 et 100") @DecimalMax(value = "100", message = "entre 0 et 100")
+          Double seuilNonClasse,
+      @NotNull(message = "obligatoire") @DecimalMin(value = "0", message = "entre 0 et 100") @DecimalMax(value = "100", message = "entre 0 et 100")
+          Double seuilMatieresIgnorees,
+      @Size(max = 30, message = "30 critères au plus") List<@jakarta.validation.Valid CritereDepartage> criteres) {
+
+    public static ReglesResultats de(Etablissement e) {
+      return new ReglesResultats(
+          e.getMoyenneDeliberation() == null ? null : e.getMoyenneDeliberation().doubleValue(), e.getHeuresRefusTableauHonneur(),
+          e.getSeuilNonClasse().doubleValue(), e.getSeuilMatieresIgnorees().doubleValue(),
+          e.getCriteresDepartage() == null ? List.of() : e.getCriteresDepartage().stream().map(c -> new CritereDepartage(c.get("type"), c.get("groupe"))).toList());
+    }
+  }
 
   public record BaremeVue(String id, TypeBareme type, String libelle, String libelleLong, double min) {
 

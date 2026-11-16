@@ -43,9 +43,21 @@ public class TableauHonneurService {
     return moyenne != null && Nombres.arrondi(moyenne) >= seuil;
   }
 
+  /** Moyenne atteinte, et pas plus d'heures d'absence non justifiées sur la période que permis (null : pas de limite). */
+  public static boolean auTableau(ResultatEleve r, double seuil, Integer heuresRefus) {
+    return auTableau(r.moyenne(), seuil) && !refusePourAbsences(r, heuresRefus);
+  }
+
+  /** Refusé du tableau d'honneur : heures d'absence non justifiées de la période atteignant la limite. */
+  public static boolean refusePourAbsences(ResultatEleve r, Integer heuresRefus) {
+    return heuresRefus != null && r.minutesNonJustifiees() >= heuresRefus * 60;
+  }
+
   public Tableau tableau(String anneeId, Periode p, String classeId) {
     AnneeScolaire annee = annees.findById(anneeId).orElseThrow(() -> ApiException.introuvable("Année scolaire"));
     double seuil = etablissement.requis().getSeuilTableauHonneur().doubleValue();
+    Integer heuresRefus = etablissement.requis().getHeuresRefusTableauHonneur();
+    int refuses = 0;
     List<cm.cetic.mezesse.entity.Classe> liste =
         classeId == null
             ? classes.findByAnnee_IdOrderByNiveauAscNomAsc(anneeId)
@@ -57,19 +69,24 @@ public class TableauHonneurService {
       List<Eleve> eleves = new ArrayList<>();
       for (ResultatEleve r : d.resultats().eleves()) {
         if (!auTableau(r.moyenne(), seuil)) continue;
+        if (refusePourAbsences(r, heuresRefus)) {
+          refuses++;
+          continue;
+        }
         var e = d.inscription(r.inscriptionId()).getEleve();
         eleves.add(
             new Eleve(
                 r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), e.getDateNaissance(), e.getLieuNaissance(),
                 r.moyenne(), r.rang()));
       }
-      eleves.sort(Comparator.comparingDouble(Eleve::moyenne).reversed());
+      // Ordre du classement (un seul premier), puis la moyenne.
+      eleves.sort(Comparator.comparingInt((Eleve x) -> x.rang() == null ? 999 : x.rang().rang()).thenComparing(Comparator.comparingDouble(Eleve::moyenne).reversed()));
       int classes = (int) d.resultats().eleves().stream().filter(r -> r.moyenne() != null).count();
       String pp = c.getProfPrincipal() == null ? null : c.getProfPrincipal().getPrenom() + " " + Textes.majuscules(c.getProfPrincipal().getNom());
       parClasse.add(new Classe(c.getId(), c.getNom(), classes, d.resultats().profil().moyenneGenerale(), pp, eleves));
     }
     int total = parClasse.stream().mapToInt(c -> c.eleves().size()).sum();
-    return new Tableau(seuil, p, annee.getLibelle(), total, parClasse);
+    return new Tableau(seuil, p, annee.getLibelle(), total, parClasse, heuresRefus, refuses);
   }
 
   /** Liste du tableau d'honneur (PDF), ou un certificat par élève. */

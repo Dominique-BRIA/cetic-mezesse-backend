@@ -88,8 +88,13 @@ public class DocumentService {
           byte[] b = cle == null ? null : stockage.lire(cle);
           if (b != null) photos.put(i.getEleveId(), b);
         }
+        // Le 3e trimestre est le bulletin de fin d'année : il porte aussi le bilan annuel et la décision.
+        var annuel = p == Periode.T3 ? resultats.resultatsClasse(c.getId(), Periode.A, baremes).resultats() : null;
         BulletinPdf.Contexte ctx =
-            new BulletinPdf.Contexte(etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue(), bilanAbsences.aDesAppels(c.getId(), p) ? bilanAbsences.discipline(c.getId(), p) : Map.of());
+            new BulletinPdf.Contexte(
+                etab, donnees, rappels, comp, photos, etab.getSeuilTableauHonneur().doubleValue(),
+                bilanAbsences.aDesAppels(c.getId(), p) ? bilanAbsences.discipline(c.getId(), p) : Map.of(), annuel,
+                etab.getMoyenneDeliberation() == null ? null : etab.getMoyenneDeliberation().doubleValue());
         for (Inscription i : aImprimer) {
           pdf.nouvellePage();
           BulletinPdf.dessiner(pdf, ctx, i.getId());

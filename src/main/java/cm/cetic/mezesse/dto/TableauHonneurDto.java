@@ -30,5 +30,6 @@ public final class TableauHonneurDto {
    */
   public record Classe(String id, String nom, int effectif, Double moyenne, String profPrincipal, List<Eleve> eleves) {}
 
-  public record Tableau(double seuil, Periode periode, String annee, int total, List<Classe> classes) {}
+  /** « refusesAbsences » : élèves qui atteignaient la moyenne mais dépassent les heures d'absence non justifiées permises. */
+  public record Tableau(double seuil, Periode periode, String annee, int total, List<Classe> classes, Integer heuresRefus, int refusesAbsences) {}
 }
