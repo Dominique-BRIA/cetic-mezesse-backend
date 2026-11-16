@@ -300,30 +300,58 @@ class CalculResultatsTest {
               Map.of("a", "ZOA Paul", "b", "ABENA Luc", "c", "MBARGA Eve", "d", "ONANA Jo")));
     }
 
+    ResultatEleve designe(ResultatsClasse r) {
+      List<ResultatEleve> l = r.eleves().stream().filter(e -> e.designe() && e.rang() != null && e.rang().rang() == 1).toList();
+      assertThat(l).hasSize(1);
+      return l.get(0);
+    }
+
     @Test
-    void lesExAequoDeLaPremierePlaceSontDepartagesParLeGroupeChoisi() {
+    void lesRangsGardentLeursExAequoEtLeGroupeChoisiDesigneLePremier() {
       ResultatsClasse r = calculer(List.of(new Resultats.Critere("GROUPE", "Pro")), Map.of());
-      assertThat(r.eleve("a").rang()).isEqualTo(new Rang(1, false));
-      assertThat(r.eleve("b").rang()).isEqualTo(new Rang(2, true));
-      assertThat(r.eleve("c").rang()).isEqualTo(new Rang(2, true));
+      assertThat(r.eleve("a").rang()).isEqualTo(new Rang(1, true));
+      assertThat(r.eleve("b").rang()).isEqualTo(new Rang(1, true));
+      assertThat(r.eleve("c").rang()).isEqualTo(new Rang(1, true));
       assertThat(r.eleve("d").rang()).isEqualTo(new Rang(4, false));
+      assertThat(designe(r).inscriptionId()).isEqualTo("a");
+      // Sur le bulletin, le premier désigné porte « 1er » sans « ex » ; les autres gardent « 1er ex ».
+      assertThat(r.eleve("a").rangBulletin()).isEqualTo(new Rang(1, false));
+      assertThat(r.eleve("b").rangBulletin()).isEqualTo(new Rang(1, true));
     }
 
     @Test
     void puisLaDisciplinePuisLOrdreAlphabetique() {
-      ResultatsClasse r = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of("a", 120, "b", 0, "c", 60));
-      assertThat(r.eleve("b").rang()).isEqualTo(new Rang(1, false));
-      ResultatsClasse alpha = calculer(List.of(new Resultats.Critere("ALPHABETIQUE", null)), Map.of());
-      assertThat(alpha.eleve("b").rang()).isEqualTo(new Rang(1, false));
+      assertThat(designe(calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of("a", 120, "b", 0, "c", 60))).inscriptionId()).isEqualTo("b");
+      assertThat(designe(calculer(List.of(new Resultats.Critere("ALPHABETIQUE", null)), Map.of())).inscriptionId()).isEqualTo("b");
+    }
+
+    @Test
+    void laRegleVautPourChaqueGroupeDExAequo() {
+      // e a les notes de d : tous deux 4e ex ; par ordre alphabétique, d (ONANA) passe avant e (TCHOUA).
+      List<NoteEntree> notes =
+          List.of(
+              n("a", "fr", 1, 10), n("a", "atelier", 1, 14), n("b", "fr", 1, 14), n("b", "atelier", 1, 10), n("c", "fr", 1, 12), n("c", "atelier", 1, 12),
+              n("d", "fr", 1, 5), n("d", "atelier", 1, 5), n("e", "fr", 1, 5), n("e", "atelier", 1, 5));
+      ResultatsClasse r =
+          CalculResultats.calculer(
+              new CalculResultats.Entrees(
+                  Periode.S1, matieres, List.of("a", "b", "c", "d", "e"), notes, GRADES, COTES,
+                  new Resultats.Regles(33.33, 66.67, List.of(new Resultats.Critere("ALPHABETIQUE", null)), null), Map.of(),
+                  Map.of("a", "ZOA Paul", "b", "ABENA Luc", "c", "MBARGA Eve", "d", "ONANA Jo", "e", "TCHOUA Ida")));
+      assertThat(r.eleve("d").rang()).isEqualTo(new Rang(4, true));
+      assertThat(r.eleve("e").rang()).isEqualTo(new Rang(4, true));
+      assertThat(r.eleve("d").rangBulletin()).isEqualTo(new Rang(4, false));
+      assertThat(r.eleve("e").rangBulletin()).isEqualTo(new Rang(4, true));
+      // À la première place aussi : b (ABENA) est désigné.
+      assertThat(r.eleve("b").rangBulletin()).isEqualTo(new Rang(1, false));
+      assertThat(r.eleve("a").rangBulletin()).isEqualTo(new Rang(1, true));
     }
 
     @Test
     void sansCritereDecisifUnTirageAuSortStable() {
       ResultatsClasse r1 = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of());
       ResultatsClasse r2 = calculer(List.of(new Resultats.Critere("DISCIPLINE", null)), Map.of());
-      long premiers = r1.eleves().stream().filter(e -> e.rang() != null && e.rang().rang() == 1).count();
-      assertThat(premiers).isEqualTo(1);
-      assertThat(r1.eleves().stream().map(ResultatEleve::rang).toList()).isEqualTo(r2.eleves().stream().map(ResultatEleve::rang).toList());
+      assertThat(designe(r1).inscriptionId()).isEqualTo(designe(r2).inscriptionId());
     }
   }
 

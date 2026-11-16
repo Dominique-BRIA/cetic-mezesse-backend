@@ -77,10 +77,14 @@ public class TableauHonneurService {
         eleves.add(
             new Eleve(
                 r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), e.getDateNaissance(), e.getLieuNaissance(),
-                r.moyenne(), r.rang()));
+                r.moyenne(), r.rangBulletin()));
       }
       // Ordre du classement (un seul premier), puis la moyenne.
-      eleves.sort(Comparator.comparingInt((Eleve x) -> x.rang() == null ? 999 : x.rang().rang()).thenComparing(Comparator.comparingDouble(Eleve::moyenne).reversed()));
+      // Ordre du classement ; parmi les premiers ex æquo, le premier désigné (« 1er » sans « ex ») passe en tête.
+      eleves.sort(
+          Comparator.comparingInt((Eleve x) -> x.rang() == null ? 999 : x.rang().rang())
+              .thenComparing((Eleve x) -> x.rang() != null && x.rang().exAequo())
+              .thenComparing(Comparator.comparingDouble(Eleve::moyenne).reversed()));
       int classes = (int) d.resultats().eleves().stream().filter(r -> r.moyenne() != null).count();
       String pp = c.getProfPrincipal() == null ? null : c.getProfPrincipal().getPrenom() + " " + Textes.majuscules(c.getProfPrincipal().getNom());
       parClasse.add(new Classe(c.getId(), c.getNom(), classes, d.resultats().profil().moyenneGenerale(), pp, eleves));

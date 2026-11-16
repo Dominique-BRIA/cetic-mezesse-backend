@@ -126,17 +126,21 @@ public final class CalculResultats {
   }
 
   /**
-   * Rangs avec un seul premier : les ex æquo de la première place sont départagés (le premier de l'ordre
-   * « departage » est 1er, les autres partagent le 2e rang) ; les autres rangs gardent leurs ex æquo.
+   * Les élèves désignés : pour chaque rang, celui que l'ordre « departage » place en tête parmi ceux qui l'occupent
+   * (seul, ou parmi les ex æquo). Les rangs ne changent pas : les autres ex æquo restent « ex ».
    */
-  public static <T> Map<T, Rang> classer(List<T> elements, Function<T, Double> valeur, Comparator<T> departage) {
-    Map<T, Rang> rangs = classer(elements, valeur);
-    List<T> premiers = new ArrayList<>(rangs.entrySet().stream().filter(x -> x.getValue().rang() == 1).map(Map.Entry::getKey).toList());
-    if (premiers.size() < 2 || departage == null) return rangs;
-    premiers.sort(departage);
-    rangs.put(premiers.get(0), new Rang(1, false));
-    for (int i = 1; i < premiers.size(); i++) rangs.put(premiers.get(i), new Rang(2, premiers.size() > 2));
-    return rangs;
+  public static <T> Set<T> designes(List<T> elements, Map<T, Rang> rangs, Comparator<T> departage) {
+    Map<Integer, List<T>> parRang = new java.util.TreeMap<>();
+    for (T x : elements) {
+      Rang r = rangs.get(x);
+      if (r != null) parRang.computeIfAbsent(r.rang(), k -> new ArrayList<>()).add(x);
+    }
+    Set<T> choisis = java.util.Collections.newSetFromMap(new IdentityHashMap<>());
+    for (List<T> groupe : parRang.values()) {
+      if (departage != null) groupe.sort(departage);
+      choisis.add(groupe.get(0));
+    }
+    return choisis;
   }
 
   /**
@@ -420,10 +424,11 @@ public final class CalculResultats {
           new ResultatEleve(
               ins, matieres.stream().map(m -> parMatiere.get(m.id())).toList(), lignesGroupes, totalCoef, totalPoints, moyenne, null,
               mention(moyenne, e.cotes()), classe && moyenne != null, e.minutesNonJustifiees().getOrDefault(ins, 0),
-              periodeEvaluee && !(classe && moyenne != null)));
+              periodeEvaluee && !(classe && moyenne != null), false));
     }
 
-    // Un seul premier : départage dans l'ordre réglé (par défaut, matières professionnelles, discipline, ordre alphabétique).
+    // Les rangs gardent leurs ex æquo ; dans chaque groupe d'ex æquo, le départage réglé (par défaut, matières
+    // professionnelles, discipline, ordre alphabétique, puis tirage au sort) désigne celui qui porte son rang sans « ex ».
     List<Critere> criteres = regles.criteres() == null || regles.criteres().isEmpty() ? criteresParDefaut(groupes) : regles.criteres();
     Map<String, String> nomsGroupes = new HashMap<>();
     for (Groupe g : groupes) nomsGroupes.put(g.id(), g.nom().strip().toLowerCase(Locale.ROOT));
@@ -434,14 +439,15 @@ public final class CalculResultats {
             ResultatEleve::minutesNonJustifiees,
             r -> e.noms().get(r.inscriptionId()),
             r -> r.inscriptionId() + "|" + e.periode().name());
-    Map<ResultatEleve, Rang> rangs = classer(eleves, ResultatEleve::moyenne, ordre);
+    Map<ResultatEleve, Rang> rangs = classer(eleves, ResultatEleve::moyenne);
+    Set<ResultatEleve> designes = designes(eleves, rangs, ordre);
     List<ResultatEleve> classes =
         eleves.stream()
             .map(
                 r ->
                     new ResultatEleve(
                         r.inscriptionId(), r.matieres(), r.groupes(), r.totalCoef(), r.totalPoints(), r.moyenne(), rangs.get(r), r.cote(), r.classe(),
-                        r.minutesNonJustifiees(), r.nonClasse()))
+                        r.minutesNonJustifiees(), r.nonClasse(), designes.contains(r)))
             .toList();
     // Sur l'année, la délibération compte comme une réussite.
     double seuilReussite = e.periode() == Periode.A && regles.moyenneDeliberation() != null ? Math.min(10, regles.moyenneDeliberation()) : 10;

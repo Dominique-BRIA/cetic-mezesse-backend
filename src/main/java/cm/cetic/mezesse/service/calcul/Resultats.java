@@ -45,6 +45,8 @@ public final class Resultats {
    * @param classe faux si l'élève n'est pas classé (trop peu de matières composées) : pas de moyenne ni de rang
    * @param minutesNonJustifiees absences non justifiées de la période (départage de la première place, tableau d'honneur)
    * @param nonClasse la période a des notes dans la classe mais l'élève n'est pas classé (même sans aucune note) : « NC »
+   * @param designe dans chaque groupe d'ex æquo (et pour un rang seul), celui que le départage désigne : il porte son
+   *     rang sans « ex » sur son bulletin et passe devant les autres au tableau d'honneur ; les rangs gardent leurs ex æquo
    */
   public record ResultatEleve(
       String inscriptionId,
@@ -57,7 +59,14 @@ public final class Resultats {
       String cote,
       boolean classe,
       int minutesNonJustifiees,
-      boolean nonClasse) {}
+      boolean nonClasse,
+      boolean designe) {
+
+    /** Le rang à imprimer sur le bulletin de l'élève : sans « ex » pour l'élève désigné de son groupe d'ex æquo. */
+    public Rang rangBulletin() {
+      return designe && rang != null ? new Rang(rang.rang(), false) : rang;
+    }
+  }
 
   /** Critère de départage de la première place : moyenne d'un groupe de matières (par son nom), discipline, ordre alphabétique. */
   public record Critere(String type, String groupe) {

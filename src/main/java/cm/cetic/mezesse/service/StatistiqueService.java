@@ -187,20 +187,7 @@ public class StatistiqueService {
     List<DonneesClasse> donnees = lesClasses.stream().map(c -> resultats.resultatsClasse(c.getId(), p, b)).toList();
 
     List<EleveEtablissement> eleves = new ArrayList<>();
-    // Départage de la première place : moyenne des groupes (par nom), absences non justifiées, nom.
-    Map<String, Map<String, Double>> groupesParEleve = new java.util.HashMap<>();
-    Map<String, Integer> minutesParEleve = new java.util.HashMap<>();
-    List<cm.cetic.mezesse.service.calcul.Resultats.Groupe> tousGroupes = new ArrayList<>();
     for (DonneesClasse d : donnees) {
-      Map<String, String> nomsGroupes = new java.util.HashMap<>();
-      for (var g : d.resultats().groupes()) {
-        nomsGroupes.put(g.id(), g.nom().strip().toLowerCase(Locale.ROOT));
-        if (tousGroupes.stream().noneMatch(x -> x.nom().equalsIgnoreCase(g.nom()))) tousGroupes.add(g);
-      }
-      for (ResultatEleve r : d.resultats().eleves()) {
-        groupesParEleve.put(r.inscriptionId(), CalculResultats.moyennesParNom(r.groupes(), nomsGroupes));
-        minutesParEleve.put(r.inscriptionId(), r.minutesNonJustifiees());
-      }
       for (ResultatEleve r : d.resultats().eleves()) {
         Inscription i = d.inscription(r.inscriptionId());
         Eleve e = i.getEleve();
@@ -211,16 +198,7 @@ public class StatistiqueService {
       }
     }
     List<EleveEtablissement> avecMoyenne = eleves.stream().filter(e -> e.moyenne() != null).toList();
-    var criteres = resultats.regles().criteres();
-    if (criteres == null || criteres.isEmpty()) criteres = CalculResultats.criteresParDefaut(tousGroupes);
-    java.util.Comparator<EleveEtablissement> ordre =
-        CalculResultats.departage(
-            criteres,
-            e -> groupesParEleve.getOrDefault(e.inscriptionId(), Map.of()),
-            e -> minutesParEleve.getOrDefault(e.inscriptionId(), 0),
-            e -> e.nom() + " " + e.prenoms(),
-            e -> e.inscriptionId() + "|" + p.name());
-    Map<EleveEtablissement, Rang> rangs = CalculResultats.classer(avecMoyenne, EleveEtablissement::moyenne, ordre);
+    Map<EleveEtablissement, Rang> rangs = CalculResultats.classer(avecMoyenne, EleveEtablissement::moyenne);
     List<EleveEtablissement> classement =
         new ArrayList<>(
             avecMoyenne.stream()

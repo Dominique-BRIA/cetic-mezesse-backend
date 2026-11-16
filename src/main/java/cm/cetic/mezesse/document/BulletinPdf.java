@@ -264,12 +264,12 @@ public final class BulletinPdf {
     rangee(pdf, xB2, lGauche, yT, "Total des points / Total", fr(r.totalPoints()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 10.6f, "Total des coef. / Coef", String.valueOf(r.totalCoef()), false, 42);
     rangee(pdf, xB2, lGauche, yT + 21.2f, "Moyenne / Average", r.moyenne() == null ? "—" : fr(r.moyenne()) + "/20", true, 46);
-    String rang = r.rang() != null ? CalculResultats.formatRang(r.rang()) + " / " + classesAvecMoyenne : r.nonClasse() ? "Non classé" : "—";
+    String rang = r.rang() != null ? CalculResultats.formatRang(r.rangBulletin()) + " / " + classesAvecMoyenne : r.nonClasse() ? "Non classé" : "—";
     rangee(pdf, xB2, lGauche, yT + 31.8f, "Rang / Rank", rang, true, 58);
     for (int k = 0; k < ctx.rappels().size(); k++) {
       Rappel rp = ctx.rappels().get(k);
       ResultatEleve er = rp.resultats().eleve(inscriptionId);
-      String valeur = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rang()) + ")";
+      String valeur = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rangBulletin()) + ")";
       rangee(pdf, xB2, lGauche, yT + 42.4f + k * 10.6f, libelleCourt(rp.periode())[0], valeur, false, 58);
     }
     // Cotes de compétence, la cote obtenue est cochée
@@ -357,7 +357,7 @@ public final class BulletinPdf {
       for (int k = 0; k < trimestres.size(); k++) {
         Rappel rp = trimestres.get(k);
         ResultatEleve er = rp.resultats().eleve(inscriptionId);
-        String v = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rang()) + ")";
+        String v = er == null || er.moyenne() == null ? (er != null && er.nonClasse() ? "Non classé" : "—") : fr(er.moyenne()) + " (" + CalculResultats.formatRang(er.rangBulletin()) + ")";
         rangee(pdf, X0, l1, yT + k * 10.6f, libelleCourt(rp.periode())[0] + " / " + libelleCourt(rp.periode())[1], v, false, 60);
       }
     }
@@ -367,7 +367,7 @@ public final class BulletinPdf {
     String moy = an == null || an.moyenne() == null ? (an != null && an.nonClasse() ? "Non classé" : "—") : fr(an.moyenne()) + " / 20";
     pdf.ligne(moy, x2 + 4, yT + 9, l2 - 8, Style.de(11).gras());
     pdf.ligne("Rang annuel / Annual rank", x2 + 4, yT + 23, l2 - 8, Style.de(6).gras().couleur(Couleurs.GRIS));
-    String rang = an == null || an.rang() == null ? "—" : CalculResultats.formatRang(an.rang()) + " / " + classes;
+    String rang = an == null || an.rang() == null ? "—" : CalculResultats.formatRang(an.rangBulletin()) + " / " + classes;
     pdf.ligne(rang, x2 + 4, yT + 31, l2 - 8, Style.de(11).gras());
 
     // Profil annuel de la classe
