@@ -342,6 +342,9 @@ class CalculResultatsTest {
       assertThat(r.eleve("e").rang()).isEqualTo(new Rang(4, true));
       assertThat(r.eleve("d").rangBulletin()).isEqualTo(new Rang(4, false));
       assertThat(r.eleve("e").rangBulletin()).isEqualTo(new Rang(4, true));
+      // Rangs par matière : d et e ont 5 en français, 4e ex ; d (ONANA) est désigné.
+      assertThat(r.eleve("d").matieres().get(0).rang()).isEqualTo(new Rang(4, false));
+      assertThat(r.eleve("e").matieres().get(0).rang()).isEqualTo(new Rang(4, true));
       // À la première place aussi : b (ABENA) est désigné.
       assertThat(r.eleve("b").rangBulletin()).isEqualTo(new Rang(1, false));
       assertThat(r.eleve("a").rangBulletin()).isEqualTo(new Rang(1, true));

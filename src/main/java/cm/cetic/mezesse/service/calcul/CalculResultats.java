@@ -441,13 +441,34 @@ public final class CalculResultats {
             r -> r.inscriptionId() + "|" + e.periode().name());
     Map<ResultatEleve, Rang> rangs = classer(eleves, ResultatEleve::moyenne);
     Set<ResultatEleve> designes = designes(eleves, rangs, ordre);
+
+    // Rangs par matière : même règle, dans chaque groupe d'ex æquo l'élève désigné porte son rang sans « ex ».
+    Map<String, ResultatEleve> parInscription = new HashMap<>();
+    for (ResultatEleve r : eleves) parInscription.put(r.inscriptionId(), r);
+    for (MatiereEntree m : matieres) {
+      Map<LigneMatiere, String> inscriptionDe = new IdentityHashMap<>();
+      Map<LigneMatiere, Rang> rangsMatiere = new IdentityHashMap<>();
+      List<LigneMatiere> lignesMatiere = new ArrayList<>();
+      for (String ins : e.inscriptions()) {
+        LigneMatiere l = lignes.get(ins).get(m.id());
+        inscriptionDe.put(l, ins);
+        lignesMatiere.add(l);
+        if (l.rang() != null) rangsMatiere.put(l, l.rang());
+      }
+      Comparator<LigneMatiere> ordreMatiere = (a, b) -> ordre.compare(parInscription.get(inscriptionDe.get(a)), parInscription.get(inscriptionDe.get(b)));
+      for (LigneMatiere l : designes(lignesMatiere, rangsMatiere, ordreMatiere)) {
+        String ins = inscriptionDe.get(l);
+        lignes.get(ins).put(m.id(), l.avecRang(new Rang(l.rang().rang(), false)));
+      }
+    }
+
     List<ResultatEleve> classes =
         eleves.stream()
             .map(
                 r ->
                     new ResultatEleve(
-                        r.inscriptionId(), r.matieres(), r.groupes(), r.totalCoef(), r.totalPoints(), r.moyenne(), rangs.get(r), r.cote(), r.classe(),
-                        r.minutesNonJustifiees(), r.nonClasse(), designes.contains(r)))
+                        r.inscriptionId(), matieres.stream().map(m -> lignes.get(r.inscriptionId()).get(m.id())).toList(), r.groupes(), r.totalCoef(),
+                        r.totalPoints(), r.moyenne(), rangs.get(r), r.cote(), r.classe(), r.minutesNonJustifiees(), r.nonClasse(), designes.contains(r)))
             .toList();
     // Sur l'année, la délibération compte comme une réussite.
     double seuilReussite = e.periode() == Periode.A && regles.moyenneDeliberation() != null ? Math.min(10, regles.moyenneDeliberation()) : 10;

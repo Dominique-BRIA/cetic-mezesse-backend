@@ -111,7 +111,11 @@ public class StatistiqueService {
       Eleve e = d.inscription(r.inscriptionId()).getEleve();
       notesEleves.add(new EleveNote(r.inscriptionId(), e.getId(), e.getMatricule(), e.getNom(), e.getPrenoms(), e.getSexe(), l.note(), l.rang(), l.grade()));
     }
-    notesEleves.sort(Comparator.comparingDouble(EleveNote::note).reversed());
+    // Ordre du rang : l'élève désigné de chaque groupe d'ex æquo d'abord, puis le nom.
+    notesEleves.sort(
+        Comparator.comparingInt((EleveNote x) -> x.rang() == null ? 999 : x.rang().rang())
+            .thenComparing((EleveNote x) -> x.rang() != null && x.rang().exAequo())
+            .thenComparing(EleveNote::nom, ORDRE_ALPHABETIQUE));
 
     // Évolution sur les six séquences
     List<EvolutionMatiere> evolution = new ArrayList<>();
